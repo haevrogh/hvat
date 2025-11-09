@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>HVAT Spring Calculator</title>
   <link rel="stylesheet" href="styles/main.css">
 </head>
@@ -13,8 +13,8 @@
     <div class="tabs">
       <button id="tabCalc" class="tab active">Пары → кг</button>
       <button id="tabPick" class="tab">Цель → пары</button>
+      <button id="tabLog" class="tab">Журнал</button>
       <div class="spacer"></div>
-      <button id="infoBtn" class="icon" aria-label="Информация">ℹ️</button>
     </div>
 
     <div class="row">
@@ -62,14 +62,72 @@
         <div id="empty" class="muted">Укажи желаемую нагрузку — предложим варианты.</div>
         <div id="grid" class="grid" style="display:none"></div>
       </div>
+
+      <!-- TAB 3: Log workouts -->
+      <div id="viewLog" class="card hidden">
+        <div class="log-head">
+          <div>
+            <h2 class="card-title">Журнал тренировок</h2>
+            <p class="muted" style="margin:4px 0 0">Сохраняй подходы с эспандером в облаке и следи за прогрессом.</p>
+          </div>
+        </div>
+
+        <div id="logConfigWarning" class="log-warning hidden">
+          <strong>Нужна настройка.</strong> Добавь конфигурацию Firebase в объект <code>window.HVAT_CLOUD.firebaseConfig</code>, чтобы включить синхронизацию.
+        </div>
+
+        <form id="logForm" class="log-form">
+          <div class="field">
+            <label for="logDate">Дата</label>
+            <input id="logDate" name="sessionDate" type="date" required />
+          </div>
+          <div class="field">
+            <label for="logMovement">Упражнение</label>
+            <input id="logMovement" name="movement" type="text" placeholder="напр. Тяга стоя" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="logBand">Резина / цвет</label>
+            <input id="logBand" name="band" type="text" placeholder="напр. синяя HVAT" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="logTension">Сопротивление, кг</label>
+            <input id="logTension" name="tension" type="number" min="0" step="0.5" placeholder="опционально" />
+          </div>
+          <div class="field">
+            <label for="logSets">Подходы</label>
+            <input id="logSets" name="sets" type="number" min="1" step="1" placeholder="напр. 3" />
+          </div>
+          <div class="field">
+            <label for="logReps">Повторения</label>
+            <input id="logReps" name="reps" type="number" min="1" step="1" placeholder="напр. 12" />
+          </div>
+          <div class="field">
+            <label for="logRpe">RPE</label>
+            <input id="logRpe" name="rpe" type="number" min="5" max="10" step="0.5" placeholder="напр. 8" />
+          </div>
+          <div class="field field--wide">
+            <label for="logNotes">Заметки</label>
+            <textarea id="logNotes" name="notes" rows="3" placeholder="Как ощущения, техника, что улучшить"></textarea>
+          </div>
+          <div class="log-actions">
+            <button id="logSubmit" class="btn" type="submit">Сохранить подход</button>
+          </div>
+        </form>
+
+        <div id="logStatus" class="log-status muted" role="status"></div>
+
+        <div id="logEmpty" class="log-empty muted">Записей пока нет — добавь первый подход.</div>
+        <div id="logList" class="log-list"></div>
+      </div>
     </div>
 
-    <div id="popover" class="popover">
-      <b>Как это считается</b>
-      <div class="muted" style="margin-top:6px">F = S(i)+S(j) для двух пружин или F = S(n) для одной. S(n) аппроксимировано по таблице. Допустимо: для двух пружин позиции различны и |i−j| ≥ 2. Порядок не важен.</div>
-    </div>
   </div>
 
+  <script>
+    window.HVAT_CLOUD = window.HVAT_CLOUD || {};
+    // Заполни объект ниже данными Firebase-консоли, чтобы включить журнал тренировок.
+    window.HVAT_CLOUD.firebaseConfig = window.HVAT_CLOUD.firebaseConfig || null;
+  </script>
   <script type="module" src="js/init.js"></script>
 
 </body>

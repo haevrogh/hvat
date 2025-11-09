@@ -5,6 +5,7 @@ import {
   springForce,
 } from './formulas.js';
 import { findByWeightDouble, findByWeightSingle } from './finders.js';
+import { initLogbook } from './logbook.js';
 
 function safeOn(el, evt, fn) {
   if (el && el.addEventListener) {
@@ -25,8 +26,10 @@ function makeTicks(el) {
 export function initUI() {
   const tabCalc = document.getElementById('tabCalc');
   const tabPick = document.getElementById('tabPick');
+  const tabLog = document.getElementById('tabLog');
   const viewCalc = document.getElementById('viewCalc');
   const viewPick = document.getElementById('viewPick');
+  const viewLog = document.getElementById('viewLog');
 
   const posI = document.getElementById('posI');
   const posII = document.getElementById('posII');
@@ -44,20 +47,29 @@ export function initUI() {
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
 
-  const infoBtn = document.getElementById('infoBtn');
-  const popover = document.getElementById('popover');
-
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
     document.querySelectorAll('input[name="modePick"]'),
   );
 
+  const logForm = document.getElementById('logForm');
+  const logStatus = document.getElementById('logStatus');
+  const logEmpty = document.getElementById('logEmpty');
+  const logList = document.getElementById('logList');
+  const logWarning = document.getElementById('logConfigWarning');
+  const logDate = document.getElementById('logDate');
+
   function switchTab(which) {
-    const calcActive = which === 'calc';
-    tabCalc?.classList.toggle('active', calcActive);
-    tabPick?.classList.toggle('active', !calcActive);
-    viewCalc?.classList.toggle('hidden', !calcActive);
-    viewPick?.classList.toggle('hidden', calcActive);
+    const map = {
+      calc: { tab: tabCalc, view: viewCalc },
+      pick: { tab: tabPick, view: viewPick },
+      log: { tab: tabLog, view: viewLog },
+    };
+    Object.entries(map).forEach(([key, pair]) => {
+      const isActive = key === which;
+      pair.tab?.classList.toggle('active', isActive);
+      pair.view?.classList.toggle('hidden', !isActive);
+    });
   }
 
   function currentMode() {
@@ -159,8 +171,134 @@ export function initUI() {
     });
   }
 
+  function setLogStatus(message, tone = 'muted', persist = false) {
+    if (!logStatus) return;
+    logStatus.textContent = message;
+    logStatus.className = `log-status ${tone}`.trim();
+    if (message) {
+      logStatus.classList.add('active');
+    } else {
+      logStatus.classList.remove('active');
+    }
+    if (!persist && message) {
+      window.setTimeout(() => {
+        if (logStatus.textContent === message) {
+          logStatus.textContent = '';
+          logStatus.classList.remove('active');
+        }
+      }, 4000);
+    }
+  }
+
+  function setLogFormDisabled(flag) {
+    if (!logForm) return;
+    const elements = Array.from(logForm.elements || []);
+    elements.forEach((el) => {
+      el.disabled = flag;
+    });
+    logForm.classList.toggle('is-disabled', Boolean(flag));
+  }
+
+  function setLogDateDefault() {
+    if (!logDate) return;
+    const now = new Date();
+    const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    if (!logDate.value) logDate.value = iso;
+    logDate.max = iso;
+  }
+
+  function renderLogEntries(entries) {
+    if (!logList || !logEmpty) return;
+    if (!entries || entries.length === 0) {
+      logEmpty.classList.remove('hidden');
+      logList.innerHTML = '';
+      return;
+    }
+
+    logEmpty.classList.add('hidden');
+    logList.innerHTML = '';
+
+    entries.forEach((entry) => {
+      const item = document.createElement('article');
+      item.className = 'log-entry';
+
+      const top = document.createElement('div');
+      top.className = 'log-entry__top';
+
+      const left = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'log-entry__title';
+      title.textContent = entry.movement || 'Подход';
+      left.appendChild(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'log-entry__meta';
+      const parts = [];
+      if (entry.sessionDate) {
+        const d = new Date(entry.sessionDate);
+        parts.push(
+          Number.isNaN(d.getTime())
+            ? entry.sessionDate
+            : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
+        );
+      }
+      if (entry.band) parts.push(entry.band);
+      if (typeof entry.tension === 'number') parts.push(`${entry.tension.toFixed(1)} кг`);
+      if (parts.length > 0) {
+        meta.textContent = parts.join(' · ');
+        left.appendChild(meta);
+      }
+
+      top.appendChild(left);
+
+      const volume = document.createElement('div');
+      volume.className = 'log-entry__volume';
+      const volParts = [];
+      if (typeof entry.sets === 'number' && typeof entry.reps === 'number') {
+        volParts.push(`${entry.sets}×${entry.reps}`);
+      } else if (typeof entry.sets === 'number') {
+        volParts.push(`${entry.sets} подход`);
+      }
+      if (typeof entry.rpe === 'number') {
+        volParts.push(`RPE ${entry.rpe}`);
+      }
+      volume.textContent = volParts.join(' · ');
+      if (volume.textContent) {
+        top.appendChild(volume);
+      }
+
+      item.appendChild(top);
+
+      if (entry.notes) {
+        const notes = document.createElement('p');
+        notes.className = 'log-entry__notes';
+        notes.textContent = entry.notes;
+        item.appendChild(notes);
+      }
+
+      const stamp = document.createElement('div');
+      stamp.className = 'log-entry__stamp';
+      if (entry.loggedAt instanceof Date) {
+        stamp.textContent = `Добавлено ${entry.loggedAt.toLocaleString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: 'short',
+        })}`;
+      } else {
+        stamp.textContent = 'Добавлено';
+      }
+      item.appendChild(stamp);
+
+      logList.appendChild(item);
+    });
+  }
+
   safeOn(tabCalc, 'click', () => switchTab('calc'));
   safeOn(tabPick, 'click', () => switchTab('pick'));
+  safeOn(tabLog, 'click', () => switchTab('log'));
 
   safeOn(posI, 'input', renderPair);
   safeOn(posII, 'input', renderPair);
@@ -169,10 +307,78 @@ export function initUI() {
   safeOn(targetKg, 'input', renderOptions);
   modePickInputs.forEach((input) => safeOn(input, 'change', renderOptions));
 
-  safeOn(infoBtn, 'click', () => {
-    if (!popover) return;
-    popover.classList.toggle('show');
-    setTimeout(() => popover.classList.remove('show'), 7000);
+  if (logEmpty) logEmpty.classList.add('hidden');
+
+  const firebaseConfig = window.HVAT_CLOUD?.firebaseConfig ?? null;
+  let logReadyShown = false;
+  const logbook = initLogbook(firebaseConfig, {
+    onStatusChange(status) {
+      switch (status.kind) {
+        case 'missing-config':
+          if (logWarning) logWarning.classList.remove('hidden');
+          setLogStatus('Добавь конфигурацию Firebase, чтобы включить журнал.', 'error', true);
+          setLogFormDisabled(true);
+          break;
+        case 'connecting':
+          if (logWarning) logWarning.classList.add('hidden');
+          setLogFormDisabled(true);
+          setLogStatus('Подключаем облачную базу…', 'muted', true);
+          break;
+        case 'ready':
+          if (logWarning) logWarning.classList.add('hidden');
+          setLogFormDisabled(false);
+          if (!logReadyShown) {
+            setLogStatus('Готово! Можно сохранять подходы.', 'success');
+            logReadyShown = true;
+          } else {
+            setLogStatus('', 'muted', true);
+          }
+          break;
+        case 'error':
+          setLogFormDisabled(false);
+          setLogStatus(`Ошибка журнала: ${status.error?.message || status.error || 'неизвестно'}`, 'error', true);
+          break;
+        default:
+          break;
+      }
+    },
+    onEntries(entries) {
+      renderLogEntries(entries);
+    },
+  });
+
+  setLogDateDefault();
+
+  safeOn(logForm, 'submit', async (event) => {
+    event.preventDefault();
+    if (!logForm) return;
+    if (!firebaseConfig) {
+      setLogStatus('Журнал недоступен без настроенной Firebase-конфигурации.', 'error', true);
+      return;
+    }
+    const form = new FormData(logForm);
+    const entry = {
+      sessionDate: form.get('sessionDate') || '',
+      movement: form.get('movement') || '',
+      band: form.get('band') || '',
+      tension: form.get('tension') || '',
+      sets: form.get('sets') || '',
+      reps: form.get('reps') || '',
+      rpe: form.get('rpe') || '',
+      notes: form.get('notes') || '',
+    };
+    try {
+      setLogFormDisabled(true);
+      setLogStatus('Сохраняем…', 'muted', true);
+      await logbook.addEntry(entry);
+      logForm.reset();
+      setLogDateDefault();
+      setLogStatus('Подход сохранён!', 'success');
+    } catch (error) {
+      setLogStatus(`Не удалось сохранить: ${error?.message || error}`, 'error', true);
+    } finally {
+      setLogFormDisabled(false);
+    }
   });
 
   makeTicks(ticksI);
