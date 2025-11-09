@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>HVAT Spring Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Онлайн-калькулятор нагрузки эспандера HVAT по положениям пружин." />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #020817;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 960px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .card {
+      background: rgba(2, 6, 23, 0.98);
+      border: 1px solid #111827;
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0 0 6px;
+    }
+
+    h2 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    p {
+      font-size: 12px;
+      margin: 4px 0;
+      color: #9ca3af;
+    }
+
+    label {
+      font-size: 10px;
+      color: #9ca3af;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    input[type="number"] {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 10px;
+      border: 1px solid #374151;
+      background: #020817;
+      color: #e5e7eb;
+      outline: none;
+      width: 80px;
+      box-sizing: border-box;
+    }
+
+    input[type="number"]:focus {
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+    }
+
+    .inputs-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+      margin-top: 4px;
+    }
+
+    .label-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .result {
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .result strong {
+      color: #f97316;
+      font-weight: 600;
+    }
+
+    .error {
+      color: #f97316;
+    }
+
+    .muted {
+      color: #6b7280;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 10px;
+    }
+
+    th, td {
+      padding: 4px 6px;
+      text-align: left;
+    }
+
+    thead tr {
+      border-bottom: 1px solid #111827;
+      color: #9ca3af;
+    }
+
+    tbody tr:nth-child(even) {
+      background-color: rgba(9, 9, 11, 0.5);
+    }
+
+    .footer {
+      font-size: 9px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <h1>HVAT Spring Calculator</h1>
+    <p>
+      Калькулятор нагрузки регулируемого эспандера HVAT.
+      Модель: две одинаковые пружины, усилие пары позиций
+      <code>F(i, j) = S(i) + S(j)</code>,
+      где <code>S(n) = 0.3008·n² + 1.8637·n + 2.98</code> (кг),
+      коэффициенты подобраны по паспортной таблице.
+    </p>
+    <p class="muted">
+      Правила допустимых комбинаций:
+      пружины в разных отверстиях; I &gt; II; I − II ≥ 2; 1 ≤ позиции ≤ 12.
+    </p>
+  </div>
+
+  <!-- 1. Позиции → нагрузка -->
+  <div class="card">
+    <h2>1. Узнать нагрузку по положениям пружин</h2>
+    <div class="inputs-row">
+      <div class="label-block">
+        <label for="posI">Положение пружины I</label>
+        <input id="posI" type="number" min="1" max="12" />
+      </div>
+      <div class="label-block">
+        <label for="posII">Положение пружины II</label>
+        <input id="posII" type="number" min="1" max="12" />
+      </div>
+    </div>
+    <div id="pairResult" class="result muted">
+      Введи оба значения от 1 до 12.
+    </div>
+  </div>
+
+  <!-- 2. Нагрузка → позиции -->
+  <div class="card">
+    <h2>2. Подбор положений под нужную нагрузку</h2>
+    <div class="inputs-row">
+      <div class="label-block">
+        <label for="targetKg">Желаемая нагрузка (кг)</label>
+        <input id="targetKg" type="number" min="10" max="130" step="0.1" />
+      </div>
+    </div>
+    <div id="weightResult" class="result muted">
+      Введи целевой вес — покажу ближайшие допустимые комбинации.
+    </div>
+    <div class="table-wrapper">
+      <table id="weightTable" style="display:none;">
+        <thead>
+        <tr>
+          <th>Пружина I</th>
+          <th>Пружина II</th>
+          <th>Усилие (кг)</th>
+          <th>Δ от цели</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="footer">
+      ⚠️ Это инженерное приближение по официальной таблице HVAT.
+      Для табличных комбинаций типичная погрешность &lt; 1 кг.
+      Несколько подозрительных значений в бумажной инструкции рассматриваются как шум.
+      Калькулятор не является официальным продуктом производителя.
+    </div>
+  </div>
+</div>
+
+<script>
+  // Модель
+  const A = 0.3008;
+  const B = 1.8637;
+  const C = 2.98;
+
+  function springForce(n) {
+    return A * n * n + B * n + C;
+  }
+
+  function isValidPair(i, j) {
+    if (!Number.isInteger(i) || !Number.isInteger(j)) return false;
+    if (i < 1 || i > 12 || j < 1 || j > 12) return false;
+    if (i === j) return false;
+    if (i <= j) return false;
+    if (i - j < 2) return false;
+    return true;
+  }
+
+  function pairForce(i, j) {
+    if (!isValidPair(i, j)) return null;
+    return springForce(i) + springForce(j);
+  }
+
+  function findByWeight(targetKg, maxResults) {
+    if (!targetKg || targetKg <= 0) return [];
+    maxResults = maxResults || 8;
+
+    const combos = [];
+    for (let i = 1; i <= 12; i++) {
+      for (let j = 1; j <= 12; j++) {
+        if (!isValidPair(i, j)) continue;
+        const f = pairForce(i, j);
+        const diff = Math.abs(f - targetKg);
+        combos.push({ i, j, kg: f, diff });
+      }
+    }
+
+    combos.sort((a, b) => {
+      if (a.diff !== b.diff) return a.diff - b.diff;
+      return a.kg - b.kg;
+    });
+
+    return combos.slice(0, maxResults);
+  }
+
+  // DOM
+  const posIInput = document.getElementById('posI');
+  const posIIInput = document.getElementById('posII');
+  const pairResultEl = document.getElementById('pairResult');
+
+  const targetKgInput = document.getElementById('targetKg');
+  const weightResultEl = document.getElementById('weightResult');
+  const weightTable = document.getElementById('weightTable');
+  const weightTableBody = weightTable.querySelector('tbody');
+
+  function updatePairResult() {
+    const i = Number(posIInput.value);
+    const j = Number(posIIInput.value);
+
+    if (!posIInput.value || !posIIInput.value) {
+      pairResultEl.textContent = 'Введи оба значения от 1 до 12.';
+      pairResultEl.className = 'result muted';
+      return;
+    }
+
+    if (!isValidPair(i, j)) {
+      pairResultEl.textContent =
+        'Комбинация недопустима: I и II разные, I > II, I − II ≥ 2, позиции от 1 до 12.';
+      pairResultEl.className = 'result error';
+      return;
+    }
+
+    const f = pairForce(i, j);
+    pairResultEl.innerHTML =
+      'Расчётное усилие: <strong>' + f.toFixed(1) + ' кг</strong>';
+    pairResultEl.className = 'result';
+  }
+
+  function updateWeightResult() {
+    const v = targetKgInput.value;
+    if (!v) {
+      weightResultEl.textContent =
+        'Введи целевой вес — покажу ближайшие допустимые комбинации.';
+      weightResultEl.className = 'result muted';
+      weightTable.style.display = 'none';
+      return;
+    }
+
+    const target = Number(v);
+    const rows = findByWeight(target, 8);
+
+    if (!rows.length) {
+      weightResultEl.textContent = 'Нет валидных комбинаций для такого значения.';
+      weightResultEl.className = 'result error';
+      weightTable.style.display = 'none';
+      return;
+    }
+
+    weightResultEl.textContent =
+      'Ближайшие комбинации по модели (отсортированы по |Δ|):';
+    weightResultEl.className = 'result';
+
+    weightTableBody.innerHTML = '';
+    rows.forEach(function (row) {
+      const tr = document.createElement('tr');
+
+      const tdI = document.createElement('td');
+      tdI.textContent = row.i;
+
+      const tdJ = document.createElement('td');
+      tdJ.textContent = row.j;
+
+      const tdKg = document.createElement('td');
+      tdKg.textContent = row.kg.toFixed(1);
+
+      const tdDiff = document.createElement('td');
+      tdDiff.textContent = row.diff.toFixed(1) + ' кг';
+
+      tr.appendChild(tdI);
+      tr.appendChild(tdJ);
+      tr.appendChild(tdKg);
+      tr.appendChild(tdDiff);
+
+      weightTableBody.appendChild(tr);
+    });
+
+    weightTable.style.display = 'table';
+  }
+
+  posIInput.addEventListener('input', updatePairResult);
+  posIIInput.addEventListener('input', updatePairResult);
+  targetKgInput.addEventListener('input', updateWeightResult);
+</script>
+</body>
+</html>
