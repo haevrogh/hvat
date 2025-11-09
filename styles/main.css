@@ -282,24 +282,6 @@ input[type=range]::-moz-range-thumb
   border-color:var(--accent);
   box-shadow:0 0 0 3px rgba(59,130,246,0.12);
 }
-.popover
-{
-  position:fixed;
-  top:16px;
-  right:16px;
-  background:#fff;
-  border-radius:14px;
-  padding:14px 16px;
-  box-shadow:var(--shadow);
-  width:min(360px, calc(100% - 32px));
-  font-size:13px;
-  display:none;
-}
-.popover.show
-{
-  display:block;
-  animation:fade 0.2s ease;
-}
 .muted
 {
   color:var(--muted);
