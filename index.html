@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>HVAT Spring Calculator</title>
   <link rel="stylesheet" href="styles/main.css">
 </head>
@@ -14,7 +14,6 @@
       <button id="tabCalc" class="tab active">Пары → кг</button>
       <button id="tabPick" class="tab">Цель → пары</button>
       <div class="spacer"></div>
-      <button id="infoBtn" class="icon" aria-label="Информация">ℹ️</button>
     </div>
 
     <div class="row">
@@ -64,10 +63,6 @@
       </div>
     </div>
 
-    <div id="popover" class="popover">
-      <b>Как это считается</b>
-      <div class="muted" style="margin-top:6px">F = S(i)+S(j) для двух пружин или F = S(n) для одной. S(n) аппроксимировано по таблице. Допустимо: для двух пружин позиции различны и |i−j| ≥ 2. Порядок не важен.</div>
-    </div>
   </div>
 
   <script type="module" src="js/init.js"></script>

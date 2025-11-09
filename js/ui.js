@@ -44,9 +44,6 @@ export function initUI() {
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
 
-  const infoBtn = document.getElementById('infoBtn');
-  const popover = document.getElementById('popover');
-
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
     document.querySelectorAll('input[name="modePick"]'),
@@ -168,12 +165,6 @@ export function initUI() {
 
   safeOn(targetKg, 'input', renderOptions);
   modePickInputs.forEach((input) => safeOn(input, 'change', renderOptions));
-
-  safeOn(infoBtn, 'click', () => {
-    if (!popover) return;
-    popover.classList.toggle('show');
-    setTimeout(() => popover.classList.remove('show'), 7000);
-  });
 
   makeTicks(ticksI);
   makeTicks(ticksII);
