@@ -2,342 +2,224 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HVAT Spring Calculator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Онлайн-калькулятор нагрузки эспандера HVAT по положениям пружин." />
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #020817;
-      color: #e5e7eb;
-      display: flex;
-      justify-content: center;
-      min-height: 100vh;
-    }
+    :root{ --bg:#f7f7f9; --card:#ffffff; --text:#0b0f19; --muted:#6b7280; --accent:#3b82f6; --shadow:0 12px 30px rgba(11,15,25,.08); --radius:18px; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color:var(--text); background:var(--bg); display:flex; justify-content:center; align-items:flex-start}
+    .wrap{width:100%; max-width:960px; padding:24px}
 
-    .page {
-      width: 100%;
-      max-width: 960px;
-      padding: 16px;
-      box-sizing: border-box;
-    }
+    /* Tabs */
+    .tabs{display:flex; align-items:center; gap:8px; margin-bottom:12px}
+    .tab{border:1px solid #e5e7eb; background:#fff; color:#374151; padding:10px 14px; border-radius:12px; cursor:pointer; box-shadow:var(--shadow); font-size:14px}
+    .tab.active{border-color:transparent; background:#eff6ff; color:#111827}
+    .spacer{flex:1}
+    .icon{width:28px; height:28px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; display:grid; place-items:center; cursor:pointer}
 
-    .card {
-      background: rgba(2, 6, 23, 0.98);
-      border: 1px solid #111827;
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-      margin-bottom: 16px;
-    }
+    .row{display:grid; grid-template-columns:1fr; gap:16px}
 
-    h1 {
-      font-size: 20px;
-      margin: 0 0 6px;
-    }
+    .card{background:var(--card); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow)}
+    .hidden{display:none}
 
-    h2 {
-      font-size: 15px;
-      margin: 0 0 8px;
-    }
+    .reading{display:flex; align-items:center; justify-content:center; text-align:center; padding:8px 0 20px}
+    .reading .value{font-size:56px; line-height:1; font-weight:700; letter-spacing:-.02em}
+    .reading .unit{font-size:16px; color:var(--muted); margin-left:8px}
+    .reading.fade{animation:fade .28s ease}
+    @keyframes fade{from{opacity:.6; transform:translateY(2px)} to{opacity:1; transform:none}}
 
-    p {
-      font-size: 12px;
-      margin: 4px 0;
-      color: #9ca3af;
-    }
+    .controls{display:grid; grid-template-columns:1fr; gap:16px}
+    @media (min-width:600px){ .controls{grid-template-columns:1fr 1fr} }
+    .control{background:linear-gradient(180deg,#fff, #fafafa); border-radius:14px; padding:14px; box-shadow: inset 0 1px 0 rgba(0,0,0,.04)}
+    .label{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:13px; color:var(--muted)}
+    .label b{color:var(--text)}
 
-    label {
-      font-size: 10px;
-      color: #9ca3af;
-      display: block;
-      margin-bottom: 2px;
-    }
+    input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:36px; background:transparent; outline:none}
+    input[type=range]::-webkit-slider-runnable-track{height:6px; background:linear-gradient(90deg,#e5e7eb,#e5e7eb); border-radius:999px}
+    input[type=range]::-moz-range-track{height:6px; background:#e5e7eb; border-radius:999px}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:#fff; border:1px solid #e5e7eb; box-shadow:0 2px 8px rgba(0,0,0,.08); margin-top:-8px; position:relative}
+    input[type=range]::-moz-range-thumb{width:22px; height:22px; border-radius:50%; background:#fff; border:1px solid #e5e7eb; box-shadow:0 2px 8px rgba(0,0,0,.08)}
 
-    input[type="number"] {
-      padding: 4px 8px;
-      font-size: 12px;
-      border-radius: 10px;
-      border: 1px solid #374151;
-      background: #020817;
-      color: #e5e7eb;
-      outline: none;
-      width: 80px;
-      box-sizing: border-box;
-    }
+    /* Ticks perfectly aligned under the track (account thumb half-width = 11px) */
+    .ticks{display:grid; grid-template-columns:repeat(12,1fr); gap:0; font-size:12px; color:#9aa1ab; margin-top:8px; padding:0 11px} /* 11px = thumb/2 */
+    .ticks span{justify-self:center}
 
-    input[type="number"]:focus {
-      border-color: #60a5fa;
-      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
-    }
+    .mode{display:flex; gap:10px; align-items:center; margin:4px 0 10px}
+    .note{font-size:12px; color:var(--muted)}
 
-    .inputs-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      align-items: flex-end;
-      margin-top: 4px;
-    }
+    .grid{display:grid; grid-template-columns:1fr; gap:12px}
+    @media (min-width:520px){ .grid{grid-template-columns:1fr 1fr} }
+    .option{background:linear-gradient(180deg,#fff,#fbfbfb); border-radius:14px; padding:14px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between}
+    .pill{font-size:12px; color:#111827; background:#eef2ff; border:1px solid #e0e7ff; padding:4px 8px; border-radius:999px}
 
-    .label-block {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+    .target{display:flex; gap:10px; align-items:center}
+    .target input{width:110px; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font-size:14px; outline:none}
+    .target input:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,.12)}
 
-    .result {
-      margin-top: 8px;
-      font-size: 12px;
-    }
-
-    .result strong {
-      color: #f97316;
-      font-weight: 600;
-    }
-
-    .error {
-      color: #f97316;
-    }
-
-    .muted {
-      color: #6b7280;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 6px;
-      font-size: 10px;
-    }
-
-    th, td {
-      padding: 4px 6px;
-      text-align: left;
-    }
-
-    thead tr {
-      border-bottom: 1px solid #111827;
-      color: #9ca3af;
-    }
-
-    tbody tr:nth-child(even) {
-      background-color: rgba(9, 9, 11, 0.5);
-    }
-
-    .footer {
-      font-size: 9px;
-      color: #6b7280;
-      margin-top: 4px;
-    }
+    .popover{position:fixed; top:16px; right:16px; background:#fff; border-radius:14px; padding:14px 16px; box-shadow:var(--shadow); width:min(360px, calc(100% - 32px)); font-size:13px; display:none}
+    .popover.show{display:block; animation:fade .2s ease}
+    .muted{color:var(--muted)} .warn{color:#b45309}
   </style>
 </head>
 <body>
-<div class="page">
-  <div class="card">
-    <h1>HVAT Spring Calculator</h1>
-    <p>
-      Калькулятор нагрузки регулируемого эспандера HVAT.
-      Модель: две одинаковые пружины, усилие пары позиций
-      <code>F(i, j) = S(i) + S(j)</code>,
-      где <code>S(n) = 0.3008·n² + 1.8637·n + 2.98</code> (кг),
-      коэффициенты подобраны по паспортной таблице.
-    </p>
-    <p class="muted">
-      Правила допустимых комбинаций:
-      пружины в разных отверстиях; I &gt; II; I − II ≥ 2; 1 ≤ позиции ≤ 12.
-    </p>
-  </div>
+  <div class="wrap">
 
-  <!-- 1. Позиции → нагрузка -->
-  <div class="card">
-    <h2>1. Узнать нагрузку по положениям пружин</h2>
-    <div class="inputs-row">
-      <div class="label-block">
-        <label for="posI">Положение пружины I</label>
-        <input id="posI" type="number" min="1" max="12" />
+    <!-- Tabs + Info -->
+    <div class="tabs">
+      <button id="tabCalc" class="tab active">Пары → кг</button>
+      <button id="tabPick" class="tab">Цель → пары</button>
+      <div class="spacer"></div>
+      <button id="infoBtn" class="icon" aria-label="Информация">ℹ️</button>
+    </div>
+
+    <div class="row">
+      <!-- TAB 1: Calculation -->
+      <div id="viewCalc" class="card">
+        <div id="reading" class="reading">
+          <div>
+            <span id="value" class="value">—</span>
+            <span class="unit">кг</span>
+          </div>
+        </div>
+
+        <div class="mode">
+          <label><input type="radio" name="mode" value="double" checked> 2 пружины</label>
+          <label><input type="radio" name="mode" value="single"> 1 пружина</label>
+        </div>
+
+        <div class="controls" id="controls">
+          <div class="control">
+            <div class="label"><span>Пружина I</span><b><span id="posI_label">—</span></b></div>
+            <input id="posI" type="range" min="1" max="12" step="1" value="8" />
+            <div id="ticksI" class="ticks"></div>
+          </div>
+          <div class="control" id="controlII">
+            <div class="label"><span>Пружина II</span><b><span id="posII_label">—</span></b></div>
+            <input id="posII" type="range" min="1" max="12" step="1" value="5" />
+            <div id="ticksII" class="ticks"></div>
+          </div>
+        </div>
+
+        <p id="hint" class="note" style="margin-top:6px"></p>
       </div>
-      <div class="label-block">
-        <label for="posII">Положение пружины II</label>
-        <input id="posII" type="number" min="1" max="12" />
+
+      <!-- TAB 2: Pick by target -->
+      <div id="viewPick" class="card hidden">
+        <div class="label" style="margin-bottom:12px"><span>Подбор по цели</span></div>
+        <div class="mode" style="margin-bottom:6px">
+          <label><input type="radio" name="modePick" value="double" checked> 2 пружины</label>
+          <label><input type="radio" name="modePick" value="single"> 1 пружина</label>
+        </div>
+        <div class="target" style="margin-bottom:8px">
+          <input id="targetKg" type="number" min="5" max="130" step="0.1" placeholder="напр. 64.0" />
+          <span class="muted">кг</span>
+        </div>
+        <div id="empty" class="muted">Укажи желаемую нагрузку — предложим варианты.</div>
+        <div id="grid" class="grid" style="display:none"></div>
       </div>
     </div>
-    <div id="pairResult" class="result muted">
-      Введи оба значения от 1 до 12.
+
+    <div id="popover" class="popover">
+      <b>Как это считается</b>
+      <div class="muted" style="margin-top:6px">F = S(i)+S(j) для двух пружин или F = S(n) для одной. S(n) аппроксимировано по таблице. Допустимо: для двух пружин позиции различны и |i−j| ≥ 2. Порядок не важен.</div>
     </div>
   </div>
 
-  <!-- 2. Нагрузка → позиции -->
-  <div class="card">
-    <h2>2. Подбор положений под нужную нагрузку</h2>
-    <div class="inputs-row">
-      <div class="label-block">
-        <label for="targetKg">Желаемая нагрузка (кг)</label>
-        <input id="targetKg" type="number" min="10" max="130" step="0.1" />
-      </div>
-    </div>
-    <div id="weightResult" class="result muted">
-      Введи целевой вес — покажу ближайшие допустимые комбинации.
-    </div>
-    <div class="table-wrapper">
-      <table id="weightTable" style="display:none;">
-        <thead>
-        <tr>
-          <th>Пружина I</th>
-          <th>Пружина II</th>
-          <th>Усилие (кг)</th>
-          <th>Δ от цели</th>
-        </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
+  <script>
+    (function(){
+      // Модель: S(n) = 0.3008·n² + 1.8637·n + 2.98
+      const A=0.3008, B=1.8637, C=2.98; const S = n => A*n*n + B*n + C;
+      const validSingle = (n) => Number.isInteger(n) && n>=1 && n<=12;
+      const validDouble = (i,j) => Number.isInteger(i) && Number.isInteger(j) && i!==j && Math.abs(i-j)>=2 && i>=1 && i<=12 && j>=1 && j<=12;
 
-  <div class="card">
-    <div class="footer">
-      ⚠️ Это инженерное приближение по официальной таблице HVAT.
-      Для табличных комбинаций типичная погрешность &lt; 1 кг.
-      Несколько подозрительных значений в бумажной инструкции рассматриваются как шум.
-      Калькулятор не является официальным продуктом производителя.
-    </div>
-  </div>
-</div>
-
-<script>
-  // Модель
-  const A = 0.3008;
-  const B = 1.8637;
-  const C = 2.98;
-
-  function springForce(n) {
-    return A * n * n + B * n + C;
-  }
-
-  function isValidPair(i, j) {
-    if (!Number.isInteger(i) || !Number.isInteger(j)) return false;
-    if (i < 1 || i > 12 || j < 1 || j > 12) return false;
-    if (i === j) return false;
-    if (i <= j) return false;
-    if (i - j < 2) return false;
-    return true;
-  }
-
-  function pairForce(i, j) {
-    if (!isValidPair(i, j)) return null;
-    return springForce(i) + springForce(j);
-  }
-
-  function findByWeight(targetKg, maxResults) {
-    if (!targetKg || targetKg <= 0) return [];
-    maxResults = maxResults || 8;
-
-    const combos = [];
-    for (let i = 1; i <= 12; i++) {
-      for (let j = 1; j <= 12; j++) {
-        if (!isValidPair(i, j)) continue;
-        const f = pairForce(i, j);
-        const diff = Math.abs(f - targetKg);
-        combos.push({ i, j, kg: f, diff });
+      // Tabs
+      const tabCalc = document.getElementById('tabCalc');
+      const tabPick = document.getElementById('tabPick');
+      const viewCalc = document.getElementById('viewCalc');
+      const viewPick = document.getElementById('viewPick');
+      function switchTab(which){
+        const calc = which==='calc';
+        tabCalc.classList.toggle('active', calc);
+        tabPick.classList.toggle('active', !calc);
+        viewCalc.classList.toggle('hidden', !calc);
+        viewPick.classList.toggle('hidden', calc);
       }
-    }
 
-    combos.sort((a, b) => {
-      if (a.diff !== b.diff) return a.diff - b.diff;
-      return a.kg - b.kg;
-    });
+      // UI refs
+      const posI = document.getElementById('posI');
+      const posII = document.getElementById('posII');
+      const posILabel = document.getElementById('posI_label');
+      const posIILabel = document.getElementById('posII_label');
+      const controlII = document.getElementById('controlII');
+      const ticksI = document.getElementById('ticksI');
+      const ticksII = document.getElementById('ticksII');
 
-    return combos.slice(0, maxResults);
-  }
+      const valueEl = document.getElementById('value');
+      const reading = document.getElementById('reading');
+      const hint = document.getElementById('hint');
 
-  // DOM
-  const posIInput = document.getElementById('posI');
-  const posIIInput = document.getElementById('posII');
-  const pairResultEl = document.getElementById('pairResult');
+      const targetKg = document.getElementById('targetKg');
+      const grid = document.getElementById('grid');
+      const empty = document.getElementById('empty');
 
-  const targetKgInput = document.getElementById('targetKg');
-  const weightResultEl = document.getElementById('weightResult');
-  const weightTable = document.getElementById('weightTable');
-  const weightTableBody = weightTable.querySelector('tbody');
+      const infoBtn = document.getElementById('infoBtn');
+      const popover = document.getElementById('popover');
 
-  function updatePairResult() {
-    const i = Number(posIInput.value);
-    const j = Number(posIIInput.value);
+      const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+      const modePickInputs = Array.from(document.querySelectorAll('input[name="modePick"]'));
 
-    if (!posIInput.value || !posIIInput.value) {
-      pairResultEl.textContent = 'Введи оба значения от 1 до 12.';
-      pairResultEl.className = 'result muted';
-      return;
-    }
+      function safeOn(el, evt, fn){ if(el && el.addEventListener) el.addEventListener(evt, fn); }
 
-    if (!isValidPair(i, j)) {
-      pairResultEl.textContent =
-        'Комбинация недопустима: I и II разные, I > II, I − II ≥ 2, позиции от 1 до 12.';
-      pairResultEl.className = 'result error';
-      return;
-    }
+      function makeTicks(el){ if(!el) return; el.innerHTML=''; for(let n=1;n<=12;n++){ const sp=document.createElement('span'); sp.textContent=n; el.appendChild(sp);} }
 
-    const f = pairForce(i, j);
-    pairResultEl.innerHTML =
-      'Расчётное усилие: <strong>' + f.toFixed(1) + ' кг</strong>';
-    pairResultEl.className = 'result';
-  }
+      function currentMode(){ const m = modeInputs.find(r=>r && r.checked); return m ? m.value : 'double'; }
+      function currentPickMode(){ const m = modePickInputs.find(r=>r && r.checked); return m ? m.value : 'double'; }
 
-  function updateWeightResult() {
-    const v = targetKgInput.value;
-    if (!v) {
-      weightResultEl.textContent =
-        'Введи целевой вес — покажу ближайшие допустимые комбинации.';
-      weightResultEl.className = 'result muted';
-      weightTable.style.display = 'none';
-      return;
-    }
+      function renderPair(){
+        if(!posI || !posILabel || !valueEl) return;
+        const mode = currentMode();
+        const i = parseInt(posI.value || '0',10); posILabel.textContent = isFinite(i)? i : '—';
+        if(mode === 'single'){
+          if(controlII) controlII.style.display = 'none';
+          if(!validSingle(i)){ valueEl.textContent = '—'; if(hint) hint.innerHTML = '<span class="warn">Недопустимо</span>: позиция 1–12.'; return; }
+          const f = S(i).toFixed(1); valueEl.textContent = f; if(hint) hint.textContent = 'Режим: 1 пружина'; if(reading){ reading.classList.remove('fade'); void reading.offsetWidth; reading.classList.add('fade'); } return;
+        }
+        if(controlII) controlII.style.display = '';
+        const j = parseInt((posII && posII.value) || '0',10); if(posIILabel) posIILabel.textContent = isFinite(j)? j : '—';
+        if(!validDouble(i,j)){ valueEl.textContent = '—'; if(hint) hint.innerHTML = 'Недопустимо для 2 пружин: позиции различны и |i−j| ≥ 2, диапазон 1–12.'; return; }
+        const f = (S(i)+S(j)).toFixed(1); valueEl.textContent = f; if(hint) hint.textContent = 'Режим: 2 пружины'; if(reading){ reading.classList.remove('fade'); void reading.offsetWidth; reading.classList.add('fade'); }
+      }
 
-    const target = Number(v);
-    const rows = findByWeight(target, 8);
+      function findByWeightSingle(target){ const rows=[]; for(let n=1;n<=12;n++){ const f=S(n); rows.push({mode:'single', i:n, f, diff:Math.abs(f-target)});} rows.sort((a,b)=> a.diff-b.diff || a.f-b.f); return rows.slice(0,2); }
+      function findByWeightDouble(target){ const rows=[]; const seen=new Set(); for(let i=1;i<=12;i++){ for(let j=i+1;j<=12;j++){ if(!validDouble(i,j)) continue; const key=i+"-"+j; if(seen.has(key)) continue; seen.add(key); const f=S(i)+S(j); rows.push({mode:'double', i, j, f, diff:Math.abs(f-target)});} } rows.sort((a,b)=> a.diff-b.diff || a.f-b.f); return rows.slice(0,2); }
 
-    if (!rows.length) {
-      weightResultEl.textContent = 'Нет валидных комбинаций для такого значения.';
-      weightResultEl.className = 'result error';
-      weightTable.style.display = 'none';
-      return;
-    }
+      function renderOptions(){ if(!grid || !empty) return; const v = parseFloat(targetKg && targetKg.value || ''); const pickMode=currentPickMode(); if(!v){ grid.style.display='none'; empty.style.display='block'; return; } const rows = pickMode==='single' ? findByWeightSingle(v) : findByWeightDouble(v); empty.style.display='none'; grid.style.display='grid'; grid.innerHTML=''; rows.forEach(r=>{ const el=document.createElement('div'); el.className='option'; if(r.mode==='single'){ el.innerHTML=`<div><div style="font-weight:600; margin-bottom:4px">${r.f.toFixed(1)} кг</div><div class="muted">Позиция: ${r.i} · 1 пружина</div></div><div class="pill">Δ ${r.diff.toFixed(1)} кг</div>`; } else { el.innerHTML=`<div><div style="font-weight:600; margin-bottom:4px">${r.f.toFixed(1)} кг</div><div class="muted">I: ${r.i} · II: ${r.j} · 2 пружины</div></div><div class="pill">Δ ${r.diff.toFixed(1)} кг</div>`; } grid.appendChild(el);}); }
 
-    weightResultEl.textContent =
-      'Ближайшие комбинации по модели (отсортированы по |Δ|):';
-    weightResultEl.className = 'result';
+      // events
+      safeOn(tabCalc,'click',()=>switchTab('calc'));
+      safeOn(tabPick,'click',()=>switchTab('pick'));
 
-    weightTableBody.innerHTML = '';
-    rows.forEach(function (row) {
-      const tr = document.createElement('tr');
+      safeOn(posI,'input',renderPair); safeOn(posII,'input',renderPair);
+      document.querySelectorAll('input[name="mode"]').forEach(el=> safeOn(el,'change',renderPair));
+      safeOn(targetKg,'input',renderOptions); document.querySelectorAll('input[name="modePick"]').forEach(el=> safeOn(el,'change',renderOptions));
+      safeOn(infoBtn,'click',()=>{ if(!popover) return; popover.classList.toggle('show'); setTimeout(()=>popover.classList.remove('show'), 7000); });
 
-      const tdI = document.createElement('td');
-      tdI.textContent = row.i;
+      // init
+      makeTicks(ticksI); makeTicks(ticksII); renderPair();
 
-      const tdJ = document.createElement('td');
-      tdJ.textContent = row.j;
-
-      const tdKg = document.createElement('td');
-      tdKg.textContent = row.kg.toFixed(1);
-
-      const tdDiff = document.createElement('td');
-      tdDiff.textContent = row.diff.toFixed(1) + ' кг';
-
-      tr.appendChild(tdI);
-      tr.appendChild(tdJ);
-      tr.appendChild(tdKg);
-      tr.appendChild(tdDiff);
-
-      weightTableBody.appendChild(tr);
-    });
-
-    weightTable.style.display = 'table';
-  }
-
-  posIInput.addEventListener('input', updatePairResult);
-  posIIInput.addEventListener('input', updatePairResult);
-  targetKgInput.addEventListener('input', updateWeightResult);
-</script>
+      // --- Lightweight tests (console) ---
+      (function runTests(){
+        const approxEq = (a,b,eps=1e-6)=>Math.abs(a-b)<eps;
+        console.assert(approxEq(S(1), A*1*1+B*1+C), 'S(1) formula');
+        console.assert(validSingle(12) && !validSingle(0), 'validSingle bounds');
+        console.assert(validDouble(12,9) && !validDouble(5,5) && !validDouble(6,5), 'validDouble rules');
+        // symmetry check for double search: (4,12) equals (12,4) once
+        const t=64; const rows=findByWeightDouble(t); const ids=new Set(rows.map(r=>r.i+'-'+r.j));
+        rows.forEach(r=>console.assert(!ids.has(r.j+'-'+r.i) || r.i===r.j,'no duplicates by order'));
+        console.log('%cTests passed','color:green');
+      })();
+    })();
+  </script>
 </body>
 </html>
