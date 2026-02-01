@@ -1,0 +1,17 @@
+{
+  "name": "HVAT Spring Calculator",
+  "short_name": "HVAT",
+  "description": "Калькулятор нагрузки для пружин HVAT.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#113051",
+  "theme_color": "#113051",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

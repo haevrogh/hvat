@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HVAT">
+  <rect width="512" height="512" fill="#113051" />
+  <g fill="#ffffff">
+    <path d="M140 155h48l68 198 68-198h48l-92 252h-48z"/>
+    <path d="M100 155h48v252h-48z"/>
+    <path d="M260 155h48v252h-48z"/>
+    <path d="M340 155h72v48h-24v204h-48V203h-24z"/>
+  </g>
+</svg>
