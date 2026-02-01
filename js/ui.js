@@ -47,11 +47,19 @@ export function initUI() {
   const empty = document.getElementById('empty');
   const comboTable = document.getElementById('comboTable');
   const comboSelection = document.getElementById('comboSelection');
+  const comboModal = document.getElementById('comboModal');
+  const comboModalWeight = document.getElementById('comboModalWeight');
+  const comboModalI = document.getElementById('comboModalI');
+  const comboModalII = document.getElementById('comboModalII');
+  const comboModalClose = document.getElementById('comboModalClose');
+  const comboModalSelect = document.getElementById('comboModalSelect');
 
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
     document.querySelectorAll('input[name="modePick"]'),
   );
+
+  let pendingCombo = null;
 
   function switchTab(which) {
     const calcActive = which === 'calc';
@@ -178,27 +186,14 @@ export function initUI() {
     combos.sort((a, b) => a.f - b.f || a.i - b.i || a.j - b.j);
     comboTable.innerHTML = '';
 
-    const header = document.createElement('div');
-    header.className = 'combo-head';
-    header.innerHTML = `
-      <span>Вес, кг</span>
-      <span>I</span>
-      <span>II</span>
-    `;
-    comboTable.appendChild(header);
-
     combos.forEach((combo) => {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'combo-row';
+      row.className = 'combo-tile';
       row.dataset.i = combo.i.toString();
       row.dataset.j = combo.j.toString();
       row.dataset.f = combo.f.toFixed(1);
-      row.innerHTML = `
-        <span class="combo-weight">${combo.f.toFixed(1)}</span>
-        <span class="combo-cell">${combo.i}</span>
-        <span class="combo-cell">${combo.j}</span>
-      `;
+      row.textContent = combo.f.toFixed(1);
       comboTable.appendChild(row);
     });
 
@@ -207,7 +202,7 @@ export function initUI() {
 
   function selectCombo(row) {
     if (!comboSelection || !row) return;
-    comboTable?.querySelectorAll('.combo-row.selected').forEach((el) => {
+    comboTable?.querySelectorAll('.combo-tile.selected').forEach((el) => {
       el.classList.remove('selected');
     });
     row.classList.add('selected');
@@ -215,6 +210,29 @@ export function initUI() {
     const j = row.dataset.j || '—';
     const f = row.dataset.f || '—';
     comboSelection.textContent = `Выбрано: ${f} кг · Пружины I: ${i}, II: ${j}`;
+  }
+
+  function openComboModal(row) {
+    if (!comboModal || !comboModalWeight || !comboModalI || !comboModalII) return;
+    pendingCombo = row;
+    comboModalWeight.textContent = `${row.dataset.f || '—'} кг`;
+    comboModalI.textContent = row.dataset.i || '—';
+    comboModalII.textContent = row.dataset.j || '—';
+    comboModal.classList.add('open');
+    comboModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeComboModal() {
+    if (!comboModal) return;
+    comboModal.classList.remove('open');
+    comboModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function confirmComboSelection() {
+    if (!pendingCombo) return;
+    selectCombo(pendingCombo);
+    pendingCombo = null;
+    closeComboModal();
   }
 
   safeOn(tabCalc, 'click', () => switchTab('calc'));
@@ -228,9 +246,16 @@ export function initUI() {
   safeOn(targetKg, 'input', renderOptions);
   modePickInputs.forEach((input) => safeOn(input, 'change', renderOptions));
   safeOn(comboTable, 'click', (event) => {
-    const row = event.target.closest('.combo-row');
+    const row = event.target.closest('.combo-tile');
     if (!row) return;
-    selectCombo(row);
+    openComboModal(row);
+  });
+  safeOn(comboModalClose, 'click', closeComboModal);
+  safeOn(comboModalSelect, 'click', confirmComboSelection);
+  safeOn(comboModal, 'click', (event) => {
+    if (event.target === comboModal) {
+      closeComboModal();
+    }
   });
 
   makeTicks(ticksI);
