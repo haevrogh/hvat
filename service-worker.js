@@ -1,30 +1,12 @@
-const CACHE_NAME = 'hvat-v1';
-const CORE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './styles/main.css',
-  './js/init.js',
-  './js/ui.js',
-  './js/formulas.js',
-  './js/finders.js',
-  './icons/icon.svg',
-];
-
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)),
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
-      ),
-    ),
+    caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))),
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -33,16 +15,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(event.request).then((response) => {
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-        return response;
-      });
-    }),
+    fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request)),
   );
 });
