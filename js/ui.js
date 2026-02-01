@@ -47,19 +47,11 @@ export function initUI() {
   const empty = document.getElementById('empty');
   const comboTable = document.getElementById('comboTable');
   const comboSelection = document.getElementById('comboSelection');
-  const comboModal = document.getElementById('comboModal');
-  const comboModalWeight = document.getElementById('comboModalWeight');
-  const comboModalI = document.getElementById('comboModalI');
-  const comboModalII = document.getElementById('comboModalII');
-  const comboModalClose = document.getElementById('comboModalClose');
-  const comboModalSelect = document.getElementById('comboModalSelect');
 
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
     document.querySelectorAll('input[name="modePick"]'),
   );
-
-  let pendingCombo = null;
 
   function switchTab(which) {
     const calcActive = which === 'calc';
@@ -264,29 +256,6 @@ export function initUI() {
     comboSelection.textContent = `Выбрано: ${f} кг · Пружины I: ${i}, II: ${j}`;
   }
 
-  function openComboModal(row) {
-    if (!comboModal || !comboModalWeight || !comboModalI || !comboModalII) return;
-    pendingCombo = row;
-    comboModalWeight.textContent = `${row.dataset.f || '—'} кг`;
-    comboModalI.textContent = row.dataset.i || '—';
-    comboModalII.textContent = row.dataset.j || '—';
-    comboModal.classList.add('open');
-    comboModal.setAttribute('aria-hidden', 'false');
-  }
-
-  function closeComboModal() {
-    if (!comboModal) return;
-    comboModal.classList.remove('open');
-    comboModal.setAttribute('aria-hidden', 'true');
-  }
-
-  function confirmComboSelection() {
-    if (!pendingCombo) return;
-    selectCombo(pendingCombo);
-    pendingCombo = null;
-    closeComboModal();
-  }
-
   safeOn(tabCalc, 'click', () => switchTab('calc'));
   safeOn(tabPick, 'click', () => switchTab('pick'));
   safeOn(tabSimple, 'click', () => switchTab('simple'));
@@ -300,14 +269,7 @@ export function initUI() {
   safeOn(comboTable, 'click', (event) => {
     const row = event.target.closest('.combo-tile');
     if (!row) return;
-    openComboModal(row);
-  });
-  safeOn(comboModalClose, 'click', closeComboModal);
-  safeOn(comboModalSelect, 'click', confirmComboSelection);
-  safeOn(comboModal, 'click', (event) => {
-    if (event.target === comboModal) {
-      closeComboModal();
-    }
+    selectCombo(row);
   });
 
   makeTicks(ticksI);
