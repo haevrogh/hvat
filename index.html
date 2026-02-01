@@ -17,6 +17,7 @@
     <div class="tabs">
       <button id="tabCalc" class="tab active">Пары → кг</button>
       <button id="tabPick" class="tab">Цель → пары</button>
+      <button id="tabSimple" class="tab">Simple pick</button>
       <div class="spacer"></div>
     </div>
 
@@ -64,6 +65,14 @@
         </div>
         <div id="empty" class="muted">Укажи желаемую нагрузку — предложим варианты.</div>
         <div id="grid" class="grid" style="display:none"></div>
+      </div>
+
+      <!-- TAB 3: Simple pick -->
+      <div id="viewSimple" class="card hidden">
+        <div class="label" style="margin-bottom:12px"><span>Simple pick</span></div>
+        <div class="muted" style="margin-bottom:10px">Тапни на вес, чтобы выбрать комбинацию.</div>
+        <div id="comboTable" class="combo-table"></div>
+        <div id="comboSelection" class="combo-selection muted">Выбор не сделан.</div>
       </div>
     </div>
 

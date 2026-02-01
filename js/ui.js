@@ -25,8 +25,10 @@ function makeTicks(el) {
 export function initUI() {
   const tabCalc = document.getElementById('tabCalc');
   const tabPick = document.getElementById('tabPick');
+  const tabSimple = document.getElementById('tabSimple');
   const viewCalc = document.getElementById('viewCalc');
   const viewPick = document.getElementById('viewPick');
+  const viewSimple = document.getElementById('viewSimple');
 
   const posI = document.getElementById('posI');
   const posII = document.getElementById('posII');
@@ -43,6 +45,8 @@ export function initUI() {
   const targetKg = document.getElementById('targetKg');
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
+  const comboTable = document.getElementById('comboTable');
+  const comboSelection = document.getElementById('comboSelection');
 
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
@@ -51,10 +55,14 @@ export function initUI() {
 
   function switchTab(which) {
     const calcActive = which === 'calc';
+    const pickActive = which === 'pick';
+    const simpleActive = which === 'simple';
     tabCalc?.classList.toggle('active', calcActive);
-    tabPick?.classList.toggle('active', !calcActive);
+    tabPick?.classList.toggle('active', pickActive);
+    tabSimple?.classList.toggle('active', simpleActive);
     viewCalc?.classList.toggle('hidden', !calcActive);
-    viewPick?.classList.toggle('hidden', calcActive);
+    viewPick?.classList.toggle('hidden', !pickActive);
+    viewSimple?.classList.toggle('hidden', !simpleActive);
   }
 
   function currentMode() {
@@ -156,8 +164,62 @@ export function initUI() {
     });
   }
 
+  function renderComboTable() {
+    if (!comboTable || !comboSelection) return;
+    const combos = [];
+
+    for (let i = 1; i <= 12; i += 1) {
+      for (let j = i + 1; j <= 12; j += 1) {
+        if (!isValidDouble(i, j)) continue;
+        combos.push({ i, j, f: doubleForce(i, j) });
+      }
+    }
+
+    combos.sort((a, b) => a.f - b.f || a.i - b.i || a.j - b.j);
+    comboTable.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'combo-head';
+    header.innerHTML = `
+      <span>Вес, кг</span>
+      <span>I</span>
+      <span>II</span>
+    `;
+    comboTable.appendChild(header);
+
+    combos.forEach((combo) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'combo-row';
+      row.dataset.i = combo.i.toString();
+      row.dataset.j = combo.j.toString();
+      row.dataset.f = combo.f.toFixed(1);
+      row.innerHTML = `
+        <span class="combo-weight">${combo.f.toFixed(1)}</span>
+        <span class="combo-cell">${combo.i}</span>
+        <span class="combo-cell">${combo.j}</span>
+      `;
+      comboTable.appendChild(row);
+    });
+
+    comboSelection.textContent = 'Выбор не сделан.';
+  }
+
+  function selectCombo(row) {
+    if (!comboSelection || !row) return;
+    comboTable?.querySelectorAll('.combo-row.selected').forEach((el) => {
+      el.classList.remove('selected');
+    });
+    row.classList.add('selected');
+    const i = row.dataset.i || '—';
+    const j = row.dataset.j || '—';
+    const f = row.dataset.f || '—';
+    comboSelection.textContent = `Выбрано: ${f} кг · Пружины I: ${i}, II: ${j}`;
+  }
+
   safeOn(tabCalc, 'click', () => switchTab('calc'));
   safeOn(tabPick, 'click', () => switchTab('pick'));
+  safeOn(tabSimple, 'click', () => switchTab('simple'));
 
   safeOn(posI, 'input', renderPair);
   safeOn(posII, 'input', renderPair);
@@ -165,9 +227,15 @@ export function initUI() {
 
   safeOn(targetKg, 'input', renderOptions);
   modePickInputs.forEach((input) => safeOn(input, 'change', renderOptions));
+  safeOn(comboTable, 'click', (event) => {
+    const row = event.target.closest('.combo-row');
+    if (!row) return;
+    selectCombo(row);
+  });
 
   makeTicks(ticksI);
   makeTicks(ticksII);
   renderPair();
   renderOptions();
+  renderComboTable();
 }
