@@ -299,8 +299,10 @@ input[type=range]::-moz-range-thumb
 }
 .combo-tile
 {
-  display:grid;
-  place-items:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
   min-height:44px;
   border-radius:14px;
   border:1px solid #e5e7eb;
@@ -310,6 +312,8 @@ input[type=range]::-moz-range-thumb
   font-size:13px;
   letter-spacing:-0.01em;
   cursor:pointer;
+  position:relative;
+  padding-bottom:10px;
   transition:transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease;
 }
 .combo-tile:active
@@ -326,6 +330,41 @@ input[type=range]::-moz-range-thumb
   border-color:#bfdbfe;
   background:#eff6ff;
   box-shadow:0 6px 20px rgba(59,130,246,0.15);
+}
+.combo-weight
+{
+  display:block;
+  transition:transform 0.12s ease;
+}
+.combo-tile.has-note .combo-weight
+{
+  transform:translateY(-4px);
+}
+.combo-note
+{
+  position:absolute;
+  bottom:6px;
+  left:50%;
+  transform:translate(-50%, 2px);
+  font-size:10px;
+  font-weight:600;
+  line-height:1;
+  color:var(--muted);
+  opacity:0;
+  transition:opacity 0.12s ease, transform 0.12s ease;
+}
+.combo-tile.has-note .combo-note
+{
+  opacity:1;
+  transform:translate(-50%, 0);
+}
+.combo-note--up
+{
+  color:#b91c1c;
+}
+.combo-note--down
+{
+  color:#15803d;
 }
 .combo-selection
 {
