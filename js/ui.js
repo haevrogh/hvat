@@ -186,18 +186,69 @@ export function initUI() {
     combos.sort((a, b) => a.f - b.f || a.i - b.i || a.j - b.j);
     comboTable.innerHTML = '';
 
-    combos.forEach((combo) => {
+    combos.forEach((combo, index) => {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'combo-tile';
       row.dataset.i = combo.i.toString();
       row.dataset.j = combo.j.toString();
       row.dataset.f = combo.f.toFixed(1);
-      row.textContent = combo.f.toFixed(1);
+      row.dataset.index = index.toString();
+      row.innerHTML = `
+        <span class="combo-weight">${combo.f.toFixed(1)}</span>
+        <span class="combo-note" aria-hidden="true"></span>
+      `;
       comboTable.appendChild(row);
     });
 
     comboSelection.textContent = 'Выбор не сделан.';
+  }
+
+  function clearComboNotes() {
+    if (!comboTable) return;
+    comboTable.querySelectorAll('.combo-note').forEach((note) => {
+      note.textContent = '';
+      note.classList.remove('combo-note--up', 'combo-note--down');
+      note.closest('.combo-tile')?.classList.remove('has-note');
+    });
+  }
+
+  function setComboNote(tile, percent) {
+    if (!tile) return;
+    const note = tile.querySelector('.combo-note');
+    if (!note) return;
+    const sign = percent > 0 ? '+' : '';
+    note.textContent = `${sign}${percent.toFixed(1)}%`;
+    note.classList.add(percent > 0 ? 'combo-note--up' : 'combo-note--down');
+    tile.classList.add('has-note');
+  }
+
+  function updateComboNotes(selectedTile) {
+    if (!comboTable || !selectedTile) return;
+    clearComboNotes();
+    const tiles = Array.from(comboTable.querySelectorAll('.combo-tile'));
+    const tileMap = [];
+    tiles.forEach((tile) => {
+      const index = Number.parseInt(tile.dataset.index || '', 10);
+      if (Number.isFinite(index)) {
+        tileMap[index] = tile;
+      }
+    });
+    const selectedIndex = Number.parseInt(selectedTile.dataset.index || '', 10);
+    const selectedValue = Number.parseFloat(selectedTile.dataset.f || '');
+    if (!Number.isFinite(selectedIndex) || !Number.isFinite(selectedValue) || !selectedValue) {
+      return;
+    }
+    for (let offset = -3; offset <= 3; offset += 1) {
+      if (offset === 0) continue;
+      const neighbor = tileMap[selectedIndex + offset];
+      if (!neighbor) continue;
+      const neighborValue = Number.parseFloat(neighbor.dataset.f || '');
+      if (!Number.isFinite(neighborValue)) continue;
+      const percent = ((neighborValue - selectedValue) / selectedValue) * 100;
+      if (Math.abs(percent) < 0.05) continue;
+      setComboNote(neighbor, percent);
+    }
   }
 
   function selectCombo(row) {
@@ -206,6 +257,7 @@ export function initUI() {
       el.classList.remove('selected');
     });
     row.classList.add('selected');
+    updateComboNotes(row);
     const i = row.dataset.i || '—';
     const j = row.dataset.j || '—';
     const f = row.dataset.f || '—';
