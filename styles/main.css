@@ -313,7 +313,6 @@ input[type=range]::-moz-range-thumb
   letter-spacing:-0.01em;
   cursor:pointer;
   position:relative;
-  padding-bottom:10px;
   transition:transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease;
 }
 .combo-tile:active
@@ -334,37 +333,40 @@ input[type=range]::-moz-range-thumb
 .combo-weight
 {
   display:block;
-  transition:transform 0.12s ease;
-}
-.combo-tile.has-note .combo-weight
-{
-  transform:translateY(-4px);
 }
 .combo-note
 {
   position:absolute;
+  right:6px;
   bottom:6px;
-  left:50%;
-  transform:translate(-50%, 2px);
   font-size:10px;
   font-weight:600;
   line-height:1;
+  padding:2px 4px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.92);
+  border:1px solid rgba(148,163,184,0.4);
   color:var(--muted);
   opacity:0;
+  transform:translateY(2px);
   transition:opacity 0.12s ease, transform 0.12s ease;
 }
 .combo-tile.has-note .combo-note
 {
   opacity:1;
-  transform:translate(-50%, 0);
+  transform:translateY(0);
 }
 .combo-note--up
 {
   color:#b91c1c;
+  border-color:rgba(248,113,113,0.55);
+  background:rgba(254,242,242,0.95);
 }
 .combo-note--down
 {
   color:#15803d;
+  border-color:rgba(134,239,172,0.6);
+  background:rgba(240,253,244,0.95);
 }
 .combo-selection
 {
