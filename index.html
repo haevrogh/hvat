@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>HVAT Spring Calculator</title>
-  <meta name="theme-color" content="#105052" />
+  <meta name="theme-color" content="#bed8d9" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -17,20 +17,27 @@
 </head>
 <body>
   <div class="wrap">
+    <header class="brand">
+      <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="40" height="40" /></div>
+      <div>
+        <div class="brand-name">HVAT</div>
+        <div class="brand-caption">Калькулятор нагрузки</div>
+      </div>
+    </header>
 
     <!-- Tabs + Info -->
-    <div class="tabs">
+    <nav class="tabs" aria-label="Разделы калькулятора">
       <button id="tabCalc" class="tab active">Пары → кг</button>
       <button id="tabPick" class="tab">Цель → пары</button>
       <button id="tabSimple" class="tab">Simple pick</button>
-      <div class="spacer"></div>
-    </div>
+    </nav>
 
     <div class="row">
       <!-- TAB 1: Calculation -->
       <div id="viewCalc" class="card">
         <div id="reading" class="reading">
-          <div>
+          <div class="reading-caption">Расчёт нагрузки</div>
+          <div class="reading-result">
             <span id="value" class="value">—</span>
             <span class="unit">кг</span>
           </div>
@@ -44,28 +51,28 @@
         <div class="controls" id="controls">
           <div class="control">
             <div class="label"><span>Пружина I</span><b><span id="posI_label">—</span></b></div>
-            <input id="posI" type="range" min="1" max="12" step="1" value="8" />
+            <input id="posI" type="range" min="1" max="12" step="1" value="8" aria-label="Позиция пружины I" />
             <div id="ticksI" class="ticks"></div>
           </div>
           <div class="control" id="controlII">
             <div class="label"><span>Пружина II</span><b><span id="posII_label">—</span></b></div>
-            <input id="posII" type="range" min="1" max="12" step="1" value="5" />
+            <input id="posII" type="range" min="1" max="12" step="1" value="5" aria-label="Позиция пружины II" />
             <div id="ticksII" class="ticks"></div>
           </div>
         </div>
 
-        <p id="hint" class="note" style="margin-top:6px"></p>
+        <p id="hint" class="note"></p>
       </div>
 
       <!-- TAB 2: Pick by target -->
       <div id="viewPick" class="card hidden">
-        <div class="label" style="margin-bottom:12px"><span>Подбор по цели</span></div>
-        <div class="mode" style="margin-bottom:6px">
+        <div class="card-title">Подбор по цели</div>
+        <div class="mode">
           <label><input type="radio" name="modePick" value="double" checked> 2 пружины</label>
           <label><input type="radio" name="modePick" value="single"> 1 пружина</label>
         </div>
-        <div class="target" style="margin-bottom:8px">
-          <input id="targetKg" type="number" min="5" max="130" step="0.1" placeholder="напр. 64.0" />
+        <div class="target">
+          <input id="targetKg" type="number" min="5" max="130" step="0.1" placeholder="напр. 64.0" aria-label="Целевая нагрузка в килограммах" />
           <span class="muted">кг</span>
         </div>
         <div id="empty" class="muted">Укажи желаемую нагрузку — предложим варианты.</div>
@@ -74,7 +81,7 @@
 
       <!-- TAB 3: Simple pick -->
       <div id="viewSimple" class="card hidden">
-        <div class="label" style="margin-bottom:12px"><span>Нагрузка, кг</span></div>
+        <div class="card-title">Нагрузка, кг</div>
         <div id="comboTable" class="combo-table"></div>
       </div>
     </div>
