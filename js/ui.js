@@ -5,6 +5,7 @@ import {
   springForce,
 } from './formulas.js';
 import { findByWeightDouble, findByWeightSingle } from './finders.js';
+import { createGripAnimation } from './grip-animation.js';
 
 function safeOn(el, evt, fn) {
   if (el && el.addEventListener) {
@@ -39,6 +40,7 @@ export function initUI() {
   const ticksII = document.getElementById('ticksII');
 
   const valueEl = document.getElementById('value');
+  const grip = createGripAnimation(document.getElementById('reading'));
   const hint = document.getElementById('hint');
 
   const targetKg = document.getElementById('targetKg');
@@ -62,6 +64,7 @@ export function initUI() {
     document.documentElement.classList.remove('calc-no-scroll');
     const calcVisible = !viewCalc?.classList.contains('hidden') &&
       !document.getElementById('sectionCalc')?.classList.contains('hidden');
+    grip.setVisible(calcVisible && !document.body.classList.contains('training-active'));
     if (!calcVisible || document.body.classList.contains('training-active')) return;
     const wrap = document.querySelector('.wrap');
     if (wrap && wrap.scrollHeight <= window.innerHeight + 1) {
@@ -119,6 +122,7 @@ export function initUI() {
     if (mode === 'single') {
       if (controlII) controlII.style.display = 'none';
       if (!isValidSingle(i)) {
+        grip.setForce(null);
         valueEl.textContent = '—';
         if (hint)
           hint.innerHTML = '<span class="warn">Недопустимо</span>: позиция 1–12.';
@@ -126,6 +130,7 @@ export function initUI() {
         return;
       }
       const f = springForce(i).toFixed(1);
+      grip.setForce(springForce(i));
       valueEl.textContent = f;
       if (hint) hint.textContent = 'Режим: 1 пружина';
       setPairLayoutState('single-valid');
@@ -136,6 +141,7 @@ export function initUI() {
     const j = parseInt((posII && posII.value) || '0', 10);
     if (posIILabel) posIILabel.textContent = Number.isFinite(j) ? j : '—';
     if (!isValidDouble(i, j)) {
+      grip.setForce(null);
       valueEl.textContent = '—';
       if (hint)
         hint.innerHTML =
@@ -144,6 +150,7 @@ export function initUI() {
       return;
     }
     const f = doubleForce(i, j).toFixed(1);
+    grip.setForce(doubleForce(i, j));
     valueEl.textContent = f;
     if (hint) hint.textContent = 'Режим: 2 пружины';
     setPairLayoutState('double-valid');

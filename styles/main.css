@@ -336,6 +336,25 @@ body.training-active .wrap, body.training-active.simple-active .wrap { padding-b
   pointer-events: none;
 }
 
+/* The illustration never participates in card sizing. Text stays above spray. */
+.reading { isolation: isolate; }
+.reading-caption, .reading-result { position: relative; z-index: 2; width: max-content; }
+.reading-result { white-space: nowrap; text-shadow: 0 2px 8px #073a44; }
+.grip-sprite {
+  position: absolute; z-index: 1; pointer-events: none;
+  width: 144px; height: 144px; right: 8px; bottom: 0;
+  background-size: 500% 300%; background-repeat: no-repeat;
+  opacity: 0;
+}
+.grip-sprite.is-ready { opacity: 1; }
+.grip-sprite.is-ready.is-invalid { opacity: .35; }
+.grip-sprite.is-renewing { animation: grip-renew 250ms ease-out both; }
+@keyframes grip-renew { from { opacity: 0; } to { opacity: 1; } }
+.grip-spray { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
+.grip-spray i { position: absolute; display: block; opacity: 0; }
+.grip-drop { width: 7px; height: 11px; border-radius: 70% 35% 65% 45%; background: #fff0bc; }
+.grip-peel { width: 9px; height: 21px; border-radius: 80% 15% 65% 20%; background: #ffd12c; box-shadow: inset 2px 0 #e6a61e; }
+
 .reading-caption {
   color: #d5eee9;
   font-size: 12px;
@@ -713,4 +732,20 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 600px) {
+  #viewCalc .reading .value { font-size: 48px; }
+  .grip-sprite { width: 112px; height: 112px; right: 2px; }
+}
+@media (max-width: 360px) {
+  #viewCalc .reading .value { font-size: 40px; }
+  #viewCalc .reading-result { gap: 5px; }
+  .grip-sprite { width: 84px; height: 84px; right: 0; bottom: 5px; }
+}
+@media (max-width: 600px) and (max-height: 830px) {
+  .grip-sprite { width: 94px; height: 94px; right: 4px; bottom: 0; }
+}
+@media (max-width: 360px) and (max-height: 830px) {
+  .grip-sprite { width: 84px; height: 84px; right: 0; bottom: 0; }
 }
