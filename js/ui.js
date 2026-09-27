@@ -39,7 +39,6 @@ export function initUI() {
   const ticksII = document.getElementById('ticksII');
 
   const valueEl = document.getElementById('value');
-  const reading = document.getElementById('reading');
   const hint = document.getElementById('hint');
 
   const targetKg = document.getElementById('targetKg');
@@ -56,6 +55,34 @@ export function initUI() {
   const modePickInputs = Array.from(
     document.querySelectorAll('input[name="modePick"]'),
   );
+  let pairLayoutState = '';
+  let viewportSyncFrame = 0;
+
+  function syncCalcViewport() {
+    document.documentElement.classList.remove('calc-no-scroll');
+    const calcVisible = !viewCalc?.classList.contains('hidden') &&
+      !document.getElementById('sectionCalc')?.classList.contains('hidden');
+    if (!calcVisible || document.body.classList.contains('training-active')) return;
+    const wrap = document.querySelector('.wrap');
+    if (wrap && wrap.scrollHeight <= window.innerHeight + 1) {
+      window.scrollTo(0, 0);
+      document.documentElement.classList.add('calc-no-scroll');
+    }
+  }
+
+  function scheduleCalcViewportSync() {
+    if (viewportSyncFrame) return;
+    viewportSyncFrame = requestAnimationFrame(() => {
+      viewportSyncFrame = 0;
+      syncCalcViewport();
+    });
+  }
+
+  function setPairLayoutState(state) {
+    if (pairLayoutState === state) return;
+    pairLayoutState = state;
+    scheduleCalcViewportSync();
+  }
 
   function switchTab(which) {
     const calcActive = which === 'calc';
@@ -69,6 +96,8 @@ export function initUI() {
     viewSimple?.classList.toggle('hidden', !simpleActive);
     comboSelection?.classList.toggle('hidden', !simpleActive);
     document.body.classList.toggle('simple-active', simpleActive);
+    document.body.classList.toggle('calc-view', calcActive);
+    scheduleCalcViewportSync();
   }
 
   function currentMode() {
@@ -93,16 +122,13 @@ export function initUI() {
         valueEl.textContent = '—';
         if (hint)
           hint.innerHTML = '<span class="warn">Недопустимо</span>: позиция 1–12.';
+        setPairLayoutState('single-invalid');
         return;
       }
       const f = springForce(i).toFixed(1);
       valueEl.textContent = f;
       if (hint) hint.textContent = 'Режим: 1 пружина';
-      if (reading) {
-        reading.classList.remove('fade');
-        void reading.offsetWidth;
-        reading.classList.add('fade');
-      }
+      setPairLayoutState('single-valid');
       return;
     }
 
@@ -113,17 +139,14 @@ export function initUI() {
       valueEl.textContent = '—';
       if (hint)
         hint.innerHTML =
-          'Недопустимо для 2 пружин: позиции различны и |i−j| ≥ 2, диапазон 1–12.';
+          '<span class="warn">Недопустимо</span>: разница позиций меньше 2.';
+      setPairLayoutState('double-invalid');
       return;
     }
     const f = doubleForce(i, j).toFixed(1);
     valueEl.textContent = f;
     if (hint) hint.textContent = 'Режим: 2 пружины';
-    if (reading) {
-      reading.classList.remove('fade');
-      void reading.offsetWidth;
-      reading.classList.add('fade');
-    }
+    setPairLayoutState('double-valid');
   }
 
   function renderOptions() {
@@ -278,6 +301,10 @@ export function initUI() {
   safeOn(tabCalc, 'click', () => switchTab('calc'));
   safeOn(tabPick, 'click', () => switchTab('pick'));
   safeOn(tabSimple, 'click', () => switchTab('simple'));
+  safeOn(document.getElementById('sectionCalcButton'), 'click', scheduleCalcViewportSync);
+  safeOn(document.getElementById('sectionTrainingButton'), 'click', scheduleCalcViewportSync);
+  safeOn(window, 'resize', scheduleCalcViewportSync);
+  document.fonts?.ready.then(scheduleCalcViewportSync);
 
   safeOn(posI, 'input', renderPair);
   safeOn(posII, 'input', renderPair);
@@ -293,6 +320,7 @@ export function initUI() {
 
   makeTicks(ticksI);
   makeTicks(ticksII);
+  switchTab('calc');
   renderPair();
   renderOptions();
   renderComboTable();
