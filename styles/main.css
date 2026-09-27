@@ -665,16 +665,16 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 }
 
 @media (max-width: 600px) and (max-height: 830px) {
-  body.calc-view:not(.training-active) .wrap { padding: 10px 12px; }
-  body.calc-view:not(.training-active) .brand { gap: 8px; margin-bottom: 8px; }
-  body.calc-view:not(.training-active) .brand-mark { width: 42px; height: 42px; border-radius: 14px; }
-  body.calc-view:not(.training-active) .brand-mark img { width: 32px; height: 32px; }
-  body.calc-view:not(.training-active) .brand-name { font-size: 18px; }
-  body.calc-view:not(.training-active) .brand-caption { font-size: 10px; }
-  body.calc-view:not(.training-active) .primary-nav { margin-bottom: 8px; padding: 4px; border-radius: 16px; }
-  body.calc-view:not(.training-active) .primary-nav__button { min-height: 38px; font-size: 12px; }
-  body.calc-view:not(.training-active) .tabs { margin-bottom: 8px; padding: 4px; border-radius: 16px; }
-  body.calc-view:not(.training-active) .tab { min-height: 38px; padding: 6px 2px; font-size: 10px; }
+  .wrap { padding: 10px 12px; }
+  .brand { gap: 8px; margin-bottom: 8px; }
+  .brand-mark { width: 42px; height: 42px; border-radius: 14px; }
+  .brand-mark img { width: 32px; height: 32px; }
+  .brand-name { font-size: 18px; }
+  .brand-caption { font-size: 10px; }
+  .primary-nav { margin-bottom: 8px; padding: 4px; border-radius: 16px; }
+  .primary-nav__button { min-height: 38px; font-size: 12px; }
+  .tabs { margin-bottom: 8px; padding: 4px; border-radius: 16px; }
+  .tab { min-height: 38px; padding: 6px 2px; font-size: 10px; }
   #viewCalc { padding: 12px; border-radius: 20px; }
   #viewCalc .reading { min-height: 100px; margin-bottom: 10px; padding: 14px 16px; }
   #viewCalc .reading-result { margin-top: 5px; }
@@ -691,10 +691,10 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 }
 
 @media (min-width: 601px) and (max-height: 720px) {
-  body.calc-view:not(.training-active) .wrap { padding: 12px 20px; }
-  body.calc-view:not(.training-active) .brand { margin-bottom: 12px; }
-  body.calc-view:not(.training-active) .primary-nav { margin-bottom: 10px; }
-  body.calc-view:not(.training-active) .tabs { margin-bottom: 10px; }
+  .wrap { padding: 12px 20px; }
+  .brand { margin-bottom: 12px; }
+  .primary-nav { margin-bottom: 10px; }
+  .tabs { margin-bottom: 10px; }
   #viewCalc { padding: 16px; }
   #viewCalc .reading { min-height: 120px; margin-bottom: 12px; padding: 18px; }
   #viewCalc .mode { margin-bottom: 10px; }
