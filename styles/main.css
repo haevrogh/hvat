@@ -380,17 +380,26 @@ input[type="range"]::-moz-range-thumb {
 
 .combo-table {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: start;
 }
 
+.combo-guide {
+  margin: -8px 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .combo-tile {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 48px;
-  padding: 7px 6px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 9px 12px;
   scroll-margin-bottom: 130px;
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 14px;
@@ -398,7 +407,7 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 4px 12px rgba(25, 79, 89, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -415,24 +424,23 @@ input[type="range"]::-moz-range-thumb {
   color: #fff;
 }
 
-.combo-weight { display: block; transform: translateY(-4px); }
+.combo-weight { display: block; line-height: 1.1; letter-spacing: -0.03em; }
 
 .combo-note {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
+  display: none;
+  flex: 0 0 auto;
+  padding-left: 7px;
+  border-left: 1px solid rgba(36, 97, 106, 0.2);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.combo-tile.has-note .combo-note { opacity: 1; transform: none; }
+.combo-tile.has-note .combo-note { display: block; }
 .combo-note--up { color: #9d451e; }
 .combo-note--down { color: #176a4d; }
+.combo-tile.selected .combo-note--selected { color: rgba(255, 255, 255, 0.9); border-left-color: rgba(255, 255, 255, 0.32); }
 
 .selection-dock {
   position: fixed;
@@ -470,6 +478,11 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 
 @media (min-width: 600px) {
   .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combo-table { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 820px) {
+  .combo-table { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 420px) {
@@ -477,8 +490,7 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
   .card { padding: 18px; border-radius: 23px; }
   .tab { padding: 8px 3px; font-size: 11px; }
   .reading { padding: 20px; }
-  .combo-table { grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 7px; }
-  .combo-tile { font-size: 12px; }
+  .combo-tile { font-size: 16px; padding: 8px 9px; }
   .selection-dock__inner { padding: 13px 12px; }
   .selection-metric + .selection-metric { padding-left: 11px; }
   .selection-metric span { font-size: 10px; }

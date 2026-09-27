@@ -46,6 +46,7 @@ export function initUI() {
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
   const comboTable = document.getElementById('comboTable');
+  const comboGuide = document.getElementById('comboGuide');
   const comboSelection = document.getElementById('comboSelection');
   const comboSpringI = document.getElementById('comboSpringI');
   const comboSpringII = document.getElementById('comboSpringII');
@@ -203,14 +204,17 @@ export function initUI() {
     if (comboSpringI) comboSpringI.textContent = '—';
     if (comboSpringII) comboSpringII.textContent = '—';
     if (comboForce) comboForce.textContent = '—';
+    if (comboGuide) comboGuide.textContent = 'Выберите нагрузку, чтобы сравнить ближайшие варианты.';
   }
 
   function clearComboNotes() {
     if (!comboTable) return;
     comboTable.querySelectorAll('.combo-note').forEach((note) => {
       note.textContent = '';
-      note.classList.remove('combo-note--up', 'combo-note--down');
-      note.closest('.combo-tile')?.classList.remove('has-note');
+      note.classList.remove('combo-note--up', 'combo-note--down', 'combo-note--selected');
+      const tile = note.closest('.combo-tile');
+      tile?.classList.remove('has-note');
+      tile?.removeAttribute('aria-description');
     });
   }
 
@@ -222,6 +226,7 @@ export function initUI() {
     note.textContent = `${sign}${percent.toFixed(1)}%`;
     note.classList.add(percent > 0 ? 'combo-note--up' : 'combo-note--down');
     tile.classList.add('has-note');
+    tile.setAttribute('aria-description', `${sign}${percent.toFixed(1)}% от выбранной нагрузки`);
   }
 
   function updateComboNotes(selectedTile) {
@@ -261,9 +266,16 @@ export function initUI() {
     row.classList.add('selected');
     row.setAttribute('aria-pressed', 'true');
     updateComboNotes(row);
+    const selectedNote = row.querySelector('.combo-note');
+    if (selectedNote) {
+      selectedNote.textContent = 'Выбрано';
+      selectedNote.classList.add('combo-note--selected');
+      row.classList.add('has-note');
+    }
     const i = row.dataset.i || '—';
     const j = row.dataset.j || '—';
     const f = row.dataset.f || '—';
+    if (comboGuide) comboGuide.textContent = `Разница с выбранной нагрузкой ${f} кг`;
     if (comboSpringI) comboSpringI.textContent = i;
     if (comboSpringII) comboSpringII.textContent = j;
     if (comboForce) comboForce.textContent = f === '—' ? f : `${f} кг`;
