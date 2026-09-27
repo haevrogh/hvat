@@ -4,13 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>HVAT Spring Calculator</title>
-  <meta name="theme-color" content="#113051" />
+  <meta name="theme-color" content="#105052" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -72,13 +74,29 @@
 
       <!-- TAB 3: Simple pick -->
       <div id="viewSimple" class="card hidden">
-        <div class="label" style="margin-bottom:12px"><span>Simple pick</span></div>
-        <div id="comboSelection" class="combo-selection muted" style="margin-bottom:10px">Выбор не сделан.</div>
+        <div class="label" style="margin-bottom:12px"><span>Нагрузка, кг</span></div>
         <div id="comboTable" class="combo-table"></div>
       </div>
     </div>
 
   </div>
+
+  <aside id="comboSelection" class="selection-dock hidden" aria-label="Выбранные пружины" aria-live="polite">
+    <div class="selection-dock__inner">
+      <div class="selection-metric">
+        <span>Пружина I</span>
+        <strong id="comboSpringI">—</strong>
+      </div>
+      <div class="selection-metric">
+        <span>Пружина II</span>
+        <strong id="comboSpringII">—</strong>
+      </div>
+      <div class="selection-metric">
+        <span>Нагрузка</span>
+        <strong id="comboForce">—</strong>
+      </div>
+    </div>
+  </aside>
 
   <script type="module" src="js/init.js"></script>
 

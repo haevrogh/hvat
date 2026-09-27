@@ -47,6 +47,9 @@ export function initUI() {
   const empty = document.getElementById('empty');
   const comboTable = document.getElementById('comboTable');
   const comboSelection = document.getElementById('comboSelection');
+  const comboSpringI = document.getElementById('comboSpringI');
+  const comboSpringII = document.getElementById('comboSpringII');
+  const comboForce = document.getElementById('comboForce');
 
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const modePickInputs = Array.from(
@@ -63,6 +66,8 @@ export function initUI() {
     viewCalc?.classList.toggle('hidden', !calcActive);
     viewPick?.classList.toggle('hidden', !pickActive);
     viewSimple?.classList.toggle('hidden', !simpleActive);
+    comboSelection?.classList.toggle('hidden', !simpleActive);
+    document.body.classList.toggle('simple-active', simpleActive);
   }
 
   function currentMode() {
@@ -165,7 +170,7 @@ export function initUI() {
   }
 
   function renderComboTable() {
-    if (!comboTable || !comboSelection) return;
+    if (!comboTable) return;
     const combos = [];
 
     for (let i = 1; i <= 12; i += 1) {
@@ -186,6 +191,8 @@ export function initUI() {
       row.dataset.j = combo.j.toString();
       row.dataset.f = combo.f.toFixed(1);
       row.dataset.index = index.toString();
+      row.setAttribute('aria-label', `${combo.f.toFixed(1)} кг, пружина I: ${combo.i}, пружина II: ${combo.j}`);
+      row.setAttribute('aria-pressed', 'false');
       row.innerHTML = `
         <span class="combo-weight">${combo.f.toFixed(1)}</span>
         <span class="combo-note" aria-hidden="true"></span>
@@ -193,7 +200,9 @@ export function initUI() {
       comboTable.appendChild(row);
     });
 
-    comboSelection.textContent = 'Выбор не сделан.';
+    if (comboSpringI) comboSpringI.textContent = '—';
+    if (comboSpringII) comboSpringII.textContent = '—';
+    if (comboForce) comboForce.textContent = '—';
   }
 
   function clearComboNotes() {
@@ -244,16 +253,20 @@ export function initUI() {
   }
 
   function selectCombo(row) {
-    if (!comboSelection || !row) return;
+    if (!row) return;
     comboTable?.querySelectorAll('.combo-tile.selected').forEach((el) => {
       el.classList.remove('selected');
+      el.setAttribute('aria-pressed', 'false');
     });
     row.classList.add('selected');
+    row.setAttribute('aria-pressed', 'true');
     updateComboNotes(row);
     const i = row.dataset.i || '—';
     const j = row.dataset.j || '—';
     const f = row.dataset.f || '—';
-    comboSelection.textContent = `Выбрано: ${f} кг · Пружины I: ${i}, II: ${j}`;
+    if (comboSpringI) comboSpringI.textContent = i;
+    if (comboSpringII) comboSpringII.textContent = j;
+    if (comboForce) comboForce.textContent = f === '—' ? f : `${f} кг`;
   }
 
   safeOn(tabCalc, 'click', () => switchTab('calc'));
