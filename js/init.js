@@ -1,6 +1,7 @@
 import { COEFFICIENTS, doubleForce, isValidDouble, isValidSingle, springForce } from './formulas.js';
 import { findByWeightDouble } from './finders.js';
 import { initUI } from './ui.js';
+import { initTrainingUI } from './workout-ui.js';
 
 function runTests() {
   const approxEq = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
@@ -25,6 +26,7 @@ function runTests() {
 }
 
 initUI();
+initTrainingUI();
 runTests();
 
 if ('serviceWorker' in navigator) {

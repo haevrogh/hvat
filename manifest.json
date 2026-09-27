@@ -1,7 +1,7 @@
 {
-  "name": "HVAT Spring Calculator",
+  "name": "HVAT — пружины и тренировки",
   "short_name": "HVAT",
-  "description": "Калькулятор нагрузки для пружин HVAT.",
+  "description": "Калькулятор нагрузки и локальный журнал тренировок HVAT.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

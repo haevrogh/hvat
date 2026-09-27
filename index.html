@@ -2,14 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>HVAT Spring Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HVAT — калькулятор и тренировки</title>
   <meta name="theme-color" content="#bed8d9" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
@@ -21,10 +18,16 @@
       <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="40" height="40" /></div>
       <div>
         <div class="brand-name">HVAT</div>
-        <div class="brand-caption">Калькулятор нагрузки</div>
+        <div class="brand-caption">Пружины и тренировки</div>
       </div>
     </header>
 
+    <nav class="primary-nav" aria-label="Основные разделы">
+      <button id="sectionCalcButton" class="primary-nav__button active" type="button" aria-pressed="true">Калькулятор</button>
+      <button id="sectionTrainingButton" class="primary-nav__button" type="button" aria-pressed="false">Тренировки</button>
+    </nav>
+
+    <section id="sectionCalc" aria-label="Калькулятор">
     <!-- Tabs + Info -->
     <nav class="tabs" aria-label="Разделы калькулятора">
       <button id="tabCalc" class="tab active">Пары → кг</button>
@@ -86,6 +89,46 @@
         <div id="comboTable" class="combo-table"></div>
       </div>
     </div>
+    </section>
+
+    <section id="sectionTraining" class="training-section hidden" aria-label="Тренировки">
+      <div id="trainingMessage" class="training-message hidden" role="status" aria-live="polite"></div>
+      <div id="trainingHome">
+        <div class="training-heading">
+          <div><p class="eyebrow">ТВОЙ ПЛАН</p><h1>Тренировки</h1><p class="training-lead">Правая рука, затем левая. Выбирай вес по своим пружинам.</p></div>
+          <button id="createTemplate" class="button button--primary" type="button">Новый шаблон</button>
+        </div>
+        <div id="resumeCard" class="resume-card hidden"></div>
+        <div class="training-panel">
+          <div class="training-panel__heading"><h2>Шаблоны</h2><span id="templateCount" class="count-pill">0</span></div>
+          <div id="templateList" class="training-list"></div>
+        </div>
+        <div class="training-panel">
+          <div class="training-panel__heading"><h2>История</h2><span id="historyCount" class="count-pill">0</span></div>
+          <div id="historyList" class="training-list"></div>
+          <button id="showMoreHistory" class="button button--quiet hidden" type="button">Показать ещё</button>
+        </div>
+        <div class="training-panel">
+          <div class="training-panel__heading"><h2>Рекорды</h2><span class="muted">1–10ПМ</span></div>
+          <div id="recordsOverview" class="records-overview"></div>
+          <div class="training-panel__actions"><button id="showRecordHistory" class="button button--quiet" type="button">История рекордов</button><button id="addManualRecord" class="button button--quiet" type="button">Внести 1ПМ</button></div>
+          <div id="recordHistory" class="record-history hidden"></div>
+        </div>
+        <div class="training-panel training-panel--data">
+          <div><h2>Мои данные</h2><p class="muted">Хранятся на этом устройстве. Экспорт поможет сохранить копию.</p></div>
+          <div class="training-panel__actions"><button id="exportTraining" class="button button--quiet" type="button">Экспорт</button><button id="importTrainingButton" class="button button--quiet" type="button">Импорт</button><input id="importTraining" type="file" accept="application/json,.json" hidden /></div>
+        </div>
+      </div>
+
+      <div id="trainingSession" class="hidden">
+        <div class="session-topline"><button id="backToTraining" class="button button--quiet" type="button">← К списку</button><span id="sessionProgress" class="count-pill"></span></div>
+        <div id="sessionHero" class="session-hero"></div>
+        <div id="restPanel" class="rest-panel hidden" role="timer"></div>
+        <div class="session-actions"><button id="completeSet" class="button button--primary button--large" type="button">✓ Подход готов</button><button id="editSessionPlan" class="button button--quiet" type="button">Изменить план</button></div>
+        <div class="training-panel"><div class="training-panel__heading"><h2>План занятия</h2><button id="toggleSound" class="button button--quiet" type="button" aria-pressed="true">Звук: вкл</button></div><div id="sessionQueue"></div></div>
+        <div class="session-footer"><button id="finishTraining" class="button button--quiet" type="button">Завершить тренировку</button><button id="cancelTraining" class="button button--danger" type="button">Отменить</button></div>
+      </div>
+    </section>
 
   </div>
 
@@ -105,6 +148,33 @@
       </div>
     </div>
   </aside>
+
+  <dialog id="planDialog" class="training-dialog">
+    <form id="planForm" method="dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">ПЛАН ТРЕНИРОВКИ</p><h2 id="planDialogTitle">Новый шаблон</h2></div><button id="closePlanDialog" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
+      <label class="field">Название<input id="planName" type="text" maxlength="100" required placeholder="Например, силовая" /></label>
+      <label class="field">Отдых между подходами, секунд<input id="planRest" type="number" min="0" max="3600" step="5" value="90" required /></label>
+      <div id="planArms"></div>
+      <p id="planError" class="form-error hidden" role="alert"></p>
+      <div class="dialog-actions"><button id="cancelPlan" class="button button--quiet" type="button">Отмена</button><button id="savePlan" class="button button--primary" type="submit">Сохранить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="updateTemplateDialog" class="training-dialog training-dialog--small">
+    <div class="dialog-heading"><h2>Обновить шаблон?</h2></div>
+    <p id="updateTemplateSummary" class="muted"></p>
+    <div class="dialog-actions"><button id="keepTemplate" class="button button--quiet" type="button">Оставить как был</button><button id="replaceTemplate" class="button button--primary" type="button">Заменить</button></div>
+  </dialog>
+
+  <dialog id="manualRecordDialog" class="training-dialog training-dialog--small">
+    <form id="manualRecordForm" method="dialog">
+      <div class="dialog-heading"><h2>Внести 1ПМ</h2><button id="closeManualRecord" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
+      <label class="field">Рука<select id="manualArm"><option value="right">Правая</option><option value="left">Левая</option></select></label>
+      <label class="field">Нагрузка и пружины<select id="manualWeight"></select></label>
+      <label class="field">Дата<input id="manualDate" type="date" required /></label>
+      <div class="dialog-actions"><button id="cancelManualRecord" class="button button--quiet" type="button">Отмена</button><button class="button button--primary" type="submit">Сохранить</button></div>
+    </form>
+  </dialog>
 
   <script type="module" src="js/init.js"></script>
 
