@@ -211,7 +211,7 @@ export function initUI() {
     if (!comboTable) return;
     comboTable.querySelectorAll('.combo-note').forEach((note) => {
       note.textContent = '';
-      note.classList.remove('combo-note--up', 'combo-note--down', 'combo-note--selected');
+      note.classList.remove('combo-note--up', 'combo-note--down');
       const tile = note.closest('.combo-tile');
       tile?.classList.remove('has-note');
       tile?.removeAttribute('aria-description');
@@ -266,12 +266,6 @@ export function initUI() {
     row.classList.add('selected');
     row.setAttribute('aria-pressed', 'true');
     updateComboNotes(row);
-    const selectedNote = row.querySelector('.combo-note');
-    if (selectedNote) {
-      selectedNote.textContent = 'Выбрано';
-      selectedNote.classList.add('combo-note--selected');
-      row.classList.add('has-note');
-    }
     const i = row.dataset.i || '—';
     const j = row.dataset.j || '—';
     const f = row.dataset.f || '—';
