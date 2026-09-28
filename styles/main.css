@@ -348,8 +348,6 @@ body.training-active .wrap, body.training-active.simple-active .wrap { padding-b
 }
 .grip-sprite.is-ready { opacity: 1; }
 .grip-sprite.is-ready.is-invalid { opacity: .35; }
-.grip-sprite.is-renewing { animation: grip-renew 250ms ease-out both; }
-@keyframes grip-renew { from { opacity: 0; } to { opacity: 1; } }
 .grip-spray { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
 .grip-spray i { position: absolute; display: block; opacity: 0; }
 .grip-drop { width: 7px; height: 11px; border-radius: 70% 35% 65% 45%; background: #fff0bc; }

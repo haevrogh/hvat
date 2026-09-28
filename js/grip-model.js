@@ -13,6 +13,7 @@ export class GripModel {
     this.ready = false;
     this.reduced = false;
     this.phase = 'pose';
+    this.exploded = false;
   }
   show(frame, phase = 'pose') {
     this.phase = phase;
@@ -21,7 +22,8 @@ export class GripModel {
   stop() {
     this.timers.forEach(this.cancel);
     this.timers = [];
-    this.show(this.force === null ? 0 : gripFrame(this.force));
+    this.show(this.exploded ? 13 : this.force === null ? 0 : gripFrame(this.force),
+      this.exploded ? 'exploded' : 'pose');
   }
   setReady(ready) { this.ready = ready; this.stop(); }
   setVisible(visible) {
@@ -39,17 +41,17 @@ export class GripModel {
     const crosses = this.force !== null && this.force < 120 && force >= 120;
     this.force = force;
     this.valid = true;
+    if (force < 120) this.exploded = false;
     if (crosses && this.ready && this.visible && !this.reduced) {
       this.stop();
+      this.exploded = true;
       this.show(10, 'burst');
       const at = (delay, fn) => this.timers.push(this.schedule(fn, delay));
       at(100, () => this.show(11, 'burst'));
       at(200, () => this.show(12, 'burst'));
       at(300, () => this.show(13, 'burst'));
-      at(400, () => this.show(13, 'pause'));
-      at(650, () => this.show(14, 'renew'));
-      at(900, () => this.stop());
-    } else if (force < 120 || this.phase === 'pose') {
+      at(400, () => this.stop());
+    } else if (force < 120 || this.phase !== 'burst') {
       this.stop();
     }
   }

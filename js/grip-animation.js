@@ -42,9 +42,8 @@ export function createGripAnimation(card) {
     sprite.dataset.phase = phase;
     sprite.classList.toggle('is-ready', ready);
     sprite.classList.toggle('is-invalid', !valid);
-    sprite.classList.toggle('is-renewing', phase === 'renew');
     if (phase === 'burst' && previousPhase !== 'burst') burst();
-    if (phase === 'pose') stopParticles();
+    if (phase !== 'burst') stopParticles();
     previousPhase = phase;
   });
   const onMotion = () => model.setReduced(motion.matches);
