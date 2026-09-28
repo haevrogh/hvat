@@ -25,6 +25,7 @@
     <nav class="primary-nav" aria-label="Основные разделы">
       <button id="sectionCalcButton" class="primary-nav__button active" type="button" aria-pressed="true">Калькулятор</button>
       <button id="sectionTrainingButton" class="primary-nav__button" type="button" aria-pressed="false">Тренировки</button>
+      <button id="sectionProgressionButton" class="primary-nav__button" type="button" aria-pressed="false">Прогрессия</button>
     </nav>
 
     <section id="sectionCalc" aria-label="Калькулятор">
@@ -101,12 +102,14 @@
           <button id="createTemplate" class="button button--primary" type="button">Новый шаблон</button>
         </div>
         <div id="resumeCard" class="resume-card hidden"></div>
+        <div id="nextProgression" class="resume-card hidden"></div>
         <div class="training-panel">
           <div class="training-panel__heading"><h2>Шаблоны</h2><span id="templateCount" class="count-pill">0</span></div>
           <div id="templateList" class="training-list"></div>
         </div>
         <div class="training-panel">
           <div class="training-panel__heading"><h2>История</h2><span id="historyCount" class="count-pill">0</span></div>
+          <label class="field">Показать<select id="historyFilter"><option value="all">Все тренировки</option><option value="standalone">Самостоятельные</option></select></label>
           <div id="historyList" class="training-list"></div>
           <button id="showMoreHistory" class="button button--quiet hidden" type="button">Показать ещё</button>
         </div>
@@ -124,12 +127,19 @@
 
       <div id="trainingSession" class="hidden">
         <div class="session-topline"><button id="backToTraining" class="button button--quiet" type="button">← К списку</button><span id="sessionProgress" class="count-pill"></span></div>
+        <div id="sessionContext" class="training-panel hidden"></div>
         <div id="sessionHero" class="session-hero"></div>
         <div id="restPanel" class="rest-panel hidden" role="timer"></div>
         <div class="session-actions"><button id="completeSet" class="button button--primary button--large" type="button">✓ Подход готов</button><button id="editSessionPlan" class="button button--quiet" type="button">Изменить план</button></div>
+        <button id="skipSet" class="button button--quiet" type="button">Пропустить подход</button>
         <div class="training-panel"><div class="training-panel__heading"><h2>План занятия</h2><button id="toggleSound" class="button button--quiet" type="button" aria-pressed="true">Звук: вкл</button></div><div id="sessionQueue"></div></div>
         <div class="session-footer"><button id="finishTraining" class="button button--quiet" type="button">Завершить тренировку</button><button id="cancelTraining" class="button button--danger" type="button">Отменить</button></div>
       </div>
+    </section>
+
+    <section id="sectionProgression" class="training-section hidden" aria-label="Прогрессия">
+      <p id="progressionMessage" class="form-error" role="alert"></p>
+      <div id="progressionRoot"></div>
     </section>
 
   </div>
@@ -178,6 +188,8 @@
     </form>
   </dialog>
 
+  <dialog id="progressionDialog" class="training-dialog" aria-label="Настройка прогрессии"></dialog>
+  <dialog id="feedbackDialog" class="training-dialog" aria-label="Итоги тренировки"></dialog>
   <script type="module" src="js/init.js"></script>
 
 </body>

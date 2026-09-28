@@ -59,6 +59,7 @@ export function initUI() {
   );
   let pairLayoutState = '';
   let viewportSyncFrame = 0;
+  document.addEventListener('hvat-section-change', () => scheduleCalcViewportSync());
 
   function syncCalcViewport() {
     document.documentElement.classList.remove('calc-no-scroll');

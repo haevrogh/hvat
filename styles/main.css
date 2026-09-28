@@ -747,3 +747,45 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 @media (max-width: 360px) and (max-height: 830px) {
   .grip-sprite { width: 84px; height: 84px; right: 0; bottom: 0; }
 }
+/* Progression shares the training surfaces and typography. */
+.primary-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.primary-nav__button { min-width: 0; padding-inline: 8px; }
+.progression-active .wrap { padding-bottom: 32px; }
+.prog-line, .prog-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.prog-actions { justify-content: flex-start; margin-top: 16px; }
+.prog-arms, .prog-fields { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+.prog-arms > div { min-width: 0; }
+.prog-arms h4 { margin: 12px 0 4px; font-size: 16px; }
+.prog-fields label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; }
+.prog-fields input, .prog-fields select { width: 100%; }
+.prog-set { padding: 10px 0; border-bottom: 1px solid rgba(23,71,78,.13); display: flex; flex-direction: column; gap: 4px; }
+.prog-set span, .prog-set small { font-size: 12px; color: #48646a; }
+.prog-set strong { font-size: 19px; font-variant-numeric: tabular-nums; }
+.prog-slot { padding: 16px 0; border-bottom: 1px solid rgba(23,71,78,.18); }
+.prog-slot h3 { margin: 0; font-size: 17px; }
+.prog-wave { padding: 16px 0; }
+.prog-slot.is-closed { opacity: .8; }
+.prog-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; margin: 10px 0; }
+.prog-check input { width: 18px; height: 18px; margin: 1px 0 0; flex: 0 0 18px; accent-color: #105c64; }
+.prog-pairs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
+#progressionRoot summary, #progressionDialog summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+#progressionRoot progress { width: 100%; height: 10px; margin: 16px 0 0; accent-color: #105c64; }
+#progressionRoot h1 { overflow-wrap: anywhere; }
+#progressionDialog fieldset, #feedbackDialog fieldset { border: 1px solid #b3c9cb; border-radius: 14px; margin: 16px 0; padding: 16px; min-width: 0; }
+#progressionDialog textarea { min-height: 76px; width: 100%; resize: vertical; font: inherit; color: inherit; border: 1px solid #a9c4c6; border-radius: 10px; padding: 10px; }
+#progressionDialog .prog-fields { margin-block: 16px; }
+.prog-decision { border-left: 4px solid #146a72; }
+#sessionContext p { margin: 8px 0; font-size: 13px; }
+@media (max-width: 420px) {
+  .primary-nav__button { font-size: 11px; padding-inline: 4px; }
+  .prog-arms { grid-template-columns: 1fr; gap: 8px; }
+  .prog-fields { gap: 10px; }
+  .prog-slot .count-pill { font-size: 10px; }
+  .prog-actions .button { flex: 1 1 auto; }
+}
+.prog-summary p { margin: 6px 0; }
+.prog-summary .prog-overview { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 12px; gap: 12px; }
+.prog-summary .prog-overview p, .prog-summary .prog-overview small { font-size: 12px; line-height: 1.4; }
+.prog-heading { margin-bottom: 12px; }
+.prog-heading h1 { font-size: clamp(24px,5vw,32px); }
+.session-queue-row small { display: block; color: #48646a; }

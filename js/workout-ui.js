@@ -3,14 +3,19 @@ import {
   calculateRecords, completedSets, copyPlan, createPlan, makeSet, newId,
   nextPending, pairFor, repeatFromHistory, validateBackup,
 } from './workout-model.js';
-import { finishWorkout, mergeBackup, put, readAll, remove, setMeta } from './workout-db.js';
+import { finishWorkout, mergeBackup, put, readAll, remove, setMeta, startWorkout, cancelWorkout, deleteWorkout, restoreImportedWorkout } from './workout-db.js';
+import { initProgressionUI } from './progression-ui.js';
+import { clone, materializeTest, pairKey } from './progression-model.js';
+import { validateProgressions } from './progression-backup.js';
+import { ROLES } from './progression-presets.js';
+import { showSection } from './navigation.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
 const formatDate = (date) => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date));
-const weightLabel = (set) => `${pairFor(set.i, set.j).kg.toFixed(1)} кг · I ${set.i} / II ${set.j}`;
+const weightLabel = (set) => `${set.kg.toFixed(1)} кг · I ${set.i} / II ${set.j}`;
 const pairValue = (set) => `${set.i}-${set.j}`;
 const pairOptions = (selected) => PAIRS.map((pair) =>
   `<option value="${pair.i}-${pair.j}" ${selected === `${pair.i}-${pair.j}` ? 'selected' : ''}>${pair.kg.toFixed(1)} кг · ${pair.i} / ${pair.j}</option>`).join('');
@@ -47,6 +52,22 @@ export async function initTrainingUI() {
   let lastSignal = '';
   let restDoneUntil = 0;
   let toastTimeout;
+  let historyFilter = 'all';
+  let saving = false;
+  let progression;
+  const reload = async () => { state = await readAll(); render(); };
+  progression = initProgressionUI({getState:()=>state,reload,
+    resume(){switchSection(true);},
+    history(id){historyFilter=id;switchSection(true);view='home';render();$('historyFilter').scrollIntoView();},
+    async start(program,slot){
+      if(state.active){switchSection(true);return;}
+      if(!slot)throw new Error('Нет следующего занятия.');
+      await startSession({title:`${program.name.slice(0,70)} · неделя ${slot.week}`,restSec:0,sets:slot.plan,sourceTemplateId:null,
+        progressionId:program.id,plannedSessionId:slot.id,slotRevision:slot.revision,
+        progressionContext:{name:program.name,week:slot.week,arms:clone(slot.arms)},
+        goalWeights:Object.fromEntries(ARMS.filter(a=>program.config.arms[a]?.method==='wave').map(a=>[a,pairKey(program.config.arms[a].goal).kg]))});
+      showSection('Training');
+    }});
 
   function message(text, error = false) {
     const box = $('trainingMessage');
@@ -58,6 +79,7 @@ export async function initTrainingUI() {
   }
 
   function switchSection(training) {
+    showSection(training?'Training':'Calc');
     sectionCalc.classList.toggle('hidden', training);
     sectionTraining.classList.toggle('hidden', !training);
     document.body.classList.toggle('training-active', training);
@@ -79,11 +101,15 @@ export async function initTrainingUI() {
   }
 
   function renderHome() {
+    progression?.render();
     const resume = $('resumeCard');
-    resume.classList.toggle('hidden', !state.active);
+    const waiting=[...state.pendingImports,...state.progressions.filter(p=>p.suspendedWorkout).map(p=>p.suspendedWorkout)];
+    resume.classList.toggle('hidden', !state.active&&!waiting.length);
     if (state.active) {
       resume.innerHTML = `<div><strong>Тренировка продолжается</strong><small>${esc(state.active.title)} · ${doneCount(state.active.sets)} из ${totalCount(state.active.sets)} подходов</small></div><button class="button" type="button" data-action="resume">Продолжить</button>`;
     }
+    else resume.innerHTML='';
+    if(waiting.length)resume.innerHTML+=waiting.map(w=>`<div><strong>Сохранённое импортированное занятие</strong><small>${esc(w.title)}</small><button class="button" type="button" data-action="restore-import" data-id="${esc(w.id)}">Продолжить после текущего</button></div>`).join('');
     $('templateCount').textContent = state.templates.length;
     $('templateList').innerHTML = state.templates.length
       ? [...state.templates].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((template) => `
@@ -94,14 +120,18 @@ export async function initTrainingUI() {
           <button class="button button--danger" data-action="delete-template" data-id="${esc(template.id)}" type="button">Удалить</button></div></div>`).join('')
       : '<div class="empty-state">Пока нет шаблонов. Создай первый план для правой и левой руки.</div>';
 
-    const history = [...state.workouts].sort((a, b) => b.endedAt.localeCompare(a.endedAt));
+    $('historyFilter').innerHTML = '<option value="all">Все тренировки</option><option value="standalone">Самостоятельные</option>'+state.progressions.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    $('historyFilter').value=historyFilter;
+    const history = [...state.workouts].filter(w=>historyFilter==='all'||(historyFilter==='standalone'?!w.progressionId:w.progressionId===historyFilter)).sort((a, b) => b.endedAt.localeCompare(a.endedAt));
     $('historyCount').textContent = history.length;
     $('historyList').innerHTML = history.length
       ? history.slice(0, historyLimit).map((workout) => `
         <div class="training-item"><div class="training-item__main"><strong>${esc(workout.title)}</strong>
           <small>${formatDate(workout.endedAt)} · ${workout.partial ? 'частично · ' : ''}правая ${workout.sets.right.length}, левая ${workout.sets.left.length}</small>
-          <details class="history-details"><summary>Подходы</summary>${ARMS.map((arm) => `<div><b>${ARM_LABELS[arm]}</b> ${workout.sets[arm].map((set) => `${set.kg.toFixed(1)} кг × ${set.actualReps}`).join(' · ') || '—'}</div>`).join('')}</details></div>
+          ${workout.progressionContext?`<small>${esc(workout.progressionContext.name)} · неделя ${workout.progressionContext.week}</small>`:''}
+          <details class="history-details"><summary>План и факт</summary>${ARMS.map((arm) => `<div><b>${ARM_LABELS[arm]}</b><p>План: ${workout.initialPlan[arm].map(s=>`${s.kg} кг × ${s.maxTest?'максимум':s.reps}`).join(' · ')||'—'}</p><p>Факт: ${workout.sets[arm].map((set) => `${set.kg.toFixed(1)} кг × ${set.status==='skipped'?'пропуск':set.actualReps}`).join(' · ') || '—'}</p>${workout.feedback?.[arm]?`<small>Техника: ${workout.feedback[arm].technique===true?'подтверждена':workout.feedback[arm].technique===false?'нарушена':'не оценена'} · боль: ${workout.feedback[arm].pain===true?'да':workout.feedback[arm].pain===false?'нет':'не оценена'}</small>`:''}</div>`).join('')}</details></div>
           <div class="training-item__actions"><button class="button" data-action="repeat-history" data-id="${esc(workout.id)}" type="button">Повторить</button>
+          ${workout.progressionId?`<button class="button" data-action="open-progression" data-id="${esc(workout.progressionId)}" type="button">Открыть прогрессию</button>`:''}
           <button class="button button--danger" data-action="delete-history" data-id="${esc(workout.id)}" type="button">Удалить</button></div></div>`).join('')
       : '<div class="empty-state">Завершённые тренировки появятся здесь.</div>';
     $('showMoreHistory').classList.toggle('hidden', history.length <= historyLimit);
@@ -133,25 +163,31 @@ export async function initTrainingUI() {
     const completed = doneCount(active.sets);
     const total = totalCount(active.sets);
     const current = nextPending(active.sets);
+    $('sessionContext').classList.toggle('hidden',!active.progressionId);
+    if(active.progressionContext)$('sessionContext').innerHTML=`<strong>${esc(active.progressionContext.name)}</strong><p>Неделя ${active.progressionContext.week}</p>${ARMS.filter(a=>active.progressionContext.arms[a]).map(a=>`<p>${ARM_LABELS[a]} · ${esc(active.progressionContext.arms[a].label)} · ${esc(active.progressionContext.arms[a].phase||'')}</p>`).join('')}<button id="openSessionProgression" class="button" type="button">Открыть прогрессию</button>`;
     $('sessionProgress').textContent = `${completed} / ${total} подходов`;
     $('toggleSound').textContent = `Звук: ${state.settings.sound ? 'вкл' : 'выкл'}`;
     $('toggleSound').setAttribute('aria-pressed', String(state.settings.sound));
     if (current) {
       const pair = pairFor(current.set.i, current.set.j);
-      $('sessionHero').innerHTML = `<div class="session-hero__top"><p class="eyebrow">ПОДХОД ${completed + 1} ИЗ ${total}</p><span>${ARM_LABELS[current.arm]}</span></div>
+      $('sessionHero').innerHTML = `<div class="session-hero__top"><p class="eyebrow">${ROLES[current.set.role]||'ПОДХОД'} · ${completed + 1} ИЗ ${total}</p><span>${ARM_LABELS[current.arm]}</span></div>
         <h1>${ARM_LABELS[current.arm]} рука</h1><div class="session-hero__weight">${pair.kg.toFixed(1)}<span>кг</span></div>
         <div class="session-hero__springs">Пружина I — ${pair.i} · Пружина II — ${pair.j}</div>
         <div class="session-fields"><label>Вес и позиции<select id="sessionWeight" aria-label="Вес и позиции пружин">${pairOptions(pairValue(current.set))}</select></label>
           <label>План<input id="sessionPlannedReps" type="number" min="1" max="999" step="1" value="${current.set.reps}" aria-label="Плановые повторы" /></label>
-          <label>Факт<input id="sessionActualReps" type="number" min="1" max="999" step="1" value="${current.set.reps}" aria-label="Фактические повторы" /></label></div>`;
+          <label>Факт<input id="sessionActualReps" type="number" min="0" max="999" step="1" value="${current.set.draftReps??(current.set.maxTest?'':current.set.reps)}" aria-label="Фактические повторы" /></label></div>
+          ${current.set.maxTest?'<p>Тест: введи число полных закрытий. После теста появятся четыре подхода по N−2.</p>':current.set.repMax?`<p>Рабочий диапазон: ${current.set.reps}–${current.set.repMax} повторений</p>`:''}
+          <label class="field">Качество подхода<select id="sessionQuality"><option value="unknown">Не оценено</option><option value="valid">Полные закрытия без помощи</option><option value="assisted">С помощью при повторении</option><option value="invalid">Неполные закрытия</option></select></label>`;
+      $('sessionQuality').value=current.set.quality||'unknown';
     } else {
-      $('sessionHero').innerHTML = `<p class="eyebrow">ПЛАН ВЫПОЛНЕН</p><h1>Все подходы готовы</h1><p>Заверши тренировку, чтобы сохранить её в истории и обновить рекорды.</p>`;
+      $('sessionHero').innerHTML = `<p class="eyebrow">КОНЕЦ ЗАНЯТИЯ</p><h1>Подходы закончились</h1><p>Заверши тренировку, чтобы сохранить выполненное в истории. Пропуски останутся отмечены отдельно.</p>`;
     }
     $('completeSet').disabled = !current || !!(active.restUntil && active.restUntil > Date.now());
-    $('finishTraining').disabled = completed === 0;
-    $('sessionQueue').innerHTML = ARMS.map((arm) => `<div class="session-queue-arm"><h3>${ARM_LABELS[arm]} рука</h3>
-      ${active.sets[arm].map((set) => `<div class="session-queue-row ${set.status === 'done' ? 'done' : current?.set.id === set.id ? 'current' : ''}"><span>${set.status === 'done' ? '✓' : '○'} ${weightLabel(set)}</span><span>${set.status === 'done' ? set.actualReps : set.reps} повт.</span></div>`).join('')}</div>`).join('')
-      + (completed ? '<button id="undoSet" class="button button--quiet" type="button">Отменить последний подход</button>' : '');
+    $('skipSet').disabled = !current;
+    $('finishTraining').disabled = !ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending'));
+    $('sessionQueue').innerHTML = ARMS.filter(arm=>active.sets[arm].length).map((arm) => `<div class="session-queue-arm"><h3>${ARM_LABELS[arm]} рука</h3>
+      ${active.sets[arm].map((set) => `<div class="session-queue-row ${set.status === 'done' ? 'done' : current?.set.id === set.id ? 'current' : ''}"><span>${set.status === 'done' ? '✓' : set.status==='skipped'?'—':'○'} ${weightLabel(set)}<small>${ROLES[set.role]||''}</small></span><span>${set.status==='skipped'?'Пропущен':`${set.status === 'done' ? set.actualReps : set.maxTest?'макс.':set.reps} повт.`}</span></div>`).join('')}</div>`).join('')
+      + (ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending')) ? '<button id="undoSet" class="button button--quiet" type="button">Отменить последний подход / пропуск</button>' : '');
     renderRest();
   }
 
@@ -221,10 +257,11 @@ export async function initTrainingUI() {
     if (purpose === 'session') {
       sets = Object.fromEntries(ARMS.map((arm) => [arm, state.active.sets[arm]
         .filter((set) => set.status === 'pending').map((set) => ({ ...set }))]));
-      name = state.active.title; restSec = state.active.restSec;
+      name = state.active.title; restSec = state.active.restOverride ?? nextPending(state.active.sets)?.set.restSec ?? state.active.restSec;
     }
     if (!sets) { message('Невозможно повторить эту запись.', true); return; }
-    editor = { purpose, source, sets };
+    const allowedArms = purpose==='session'?ARMS.filter(a=>state.active.initialPlan[a].length):purpose==='repeat'?ARMS.filter(a=>source.initialPlan[a].length):ARMS;
+    editor = { purpose, source, sets, allowedArms };
     $('planDialogTitle').textContent = ({ create: 'Новый шаблон', edit: 'Изменить шаблон', repeat: 'Повторить тренировку', session: 'Изменить план занятия' })[purpose];
     $('savePlan').textContent = purpose === 'repeat' ? 'Начать' : 'Сохранить';
     $('planName').value = name;
@@ -237,7 +274,7 @@ export async function initTrainingUI() {
   function renderPlanArms() {
     if (!editor) return;
     const leftStarted = editor.purpose === 'session' && state.active.sets.left.some((set) => set.status === 'done');
-    $('planArms').innerHTML = ARMS.map((arm) => {
+    $('planArms').innerHTML = editor.allowedArms.map((arm) => {
       const completed = editor.purpose === 'session' ? state.active.sets[arm].filter((set) => set.status === 'done').length : 0;
       const locked = arm === 'right' && leftStarted;
       return `<div class="arm-editor" data-arm="${arm}"><div class="arm-editor__heading"><h3>${ARM_LABELS[arm]} рука</h3>
@@ -277,7 +314,7 @@ export async function initTrainingUI() {
     const list = editor.sets[arm];
     const index = Number(button.closest('.set-row')?.dataset.index);
     if (action === 'add-set') list.push(makeSet(list.at(-1) ? pairFor(list.at(-1).i, list.at(-1).j) : undefined, list.at(-1)?.reps || 5));
-    if (action === 'duplicate-set') list.splice(index + 1, 0, { ...list[index], id: newId() });
+    if (action === 'duplicate-set') list.splice(index + 1, 0, { ...list[index], id: newId(), plannedSetId: newId(), generatedBy: undefined });
     if (action === 'delete-set') list.splice(index, 1);
     if (action === 'move-up' && index > 0) [list[index - 1], list[index]] = [list[index], list[index - 1]];
     if (action === 'move-down' && index < list.length - 1) [list[index + 1], list[index]] = [list[index], list[index + 1]];
@@ -292,7 +329,7 @@ export async function initTrainingUI() {
     const completed = editor.purpose === 'session' ? completedSets(state.active.sets) : { right: [], left: [] };
     const error = !name ? 'Укажи название.'
       : !Number.isInteger(restSec) || restSec < 0 || restSec > 3600 ? 'Отдых должен быть от 0 до 3600 секунд.'
-      : ARMS.some((arm) => completed[arm].length + editor.sets[arm].length < 1) ? 'Нужен хотя бы один подход для каждой руки.'
+      : editor.allowedArms.some((arm) => completed[arm].length + editor.sets[arm].length < 1) ? 'Нужен хотя бы один подход для каждой выбранной руки.'
       : ARMS.some((arm) => editor.sets[arm].some((set) => !Number.isInteger(set.reps) || set.reps < 1 || set.reps > 999)) ? 'Повторы должны быть целым числом от 1 до 999.'
       : null;
     if (error) { $('planError').textContent = error; $('planError').classList.remove('hidden'); return; }
@@ -309,7 +346,8 @@ export async function initTrainingUI() {
     } else if (editor.purpose === 'session') {
       state.active.title = name;
       state.active.restSec = restSec;
-      state.active.sets = Object.fromEntries(ARMS.map((arm) => [arm, [...completed[arm], ...editor.sets[arm]]]));
+      state.active.sets = Object.fromEntries(ARMS.map((arm) => [arm, [...state.active.sets[arm].filter(s=>s.status!=='pending'), ...editor.sets[arm]]]));
+      state.active.restOverride = restSec;
       await setMeta('active', state.active);
       message('План занятия обновлён.');
     }
@@ -318,12 +356,14 @@ export async function initTrainingUI() {
     render();
   }
 
-  async function startSession({ title, restSec, sets, sourceTemplateId }) {
+  async function startSession({ title, restSec, sets, sourceTemplateId, ...context }) {
     if (state.active) { message('Сначала заверши или отмени текущую тренировку.', true); return; }
     const now = new Date().toISOString();
-    state.active = { id: newId(), title, sourceTemplateId, startedAt: now, restSec,
-      initialPlan: copyPlan(sets), sets: copyPlan(sets), restUntil: null };
-    await setMeta('active', state.active);
+    const active = { id: newId(), title, sourceTemplateId, sourceType:context.progressionId?'progression':'standalone',...context,startedAt: now, restSec,
+      initialPlan: context.progressionId?clone(sets):copyPlan(sets), sets: context.progressionId?clone(sets):copyPlan(sets), restUntil: null };
+    if(!context.progressionId)for(const arm of ARMS)active.sets[arm].forEach((s,i)=>{s.plannedSetId=active.initialPlan[arm][i].id;active.initialPlan[arm][i].plannedSetId=s.plannedSetId;});
+    await startWorkout(active);
+    state=await readAll();
     view = 'session';
     ensureAudio();
     render();
@@ -331,18 +371,22 @@ export async function initTrainingUI() {
 
   async function completeSet() {
     const active = state.active;
-    if (!active || (active.restUntil && active.restUntil > Date.now())) return;
+    if (!active || saving || (active.restUntil && active.restUntil > Date.now())) return;
     const current = nextPending(active.sets);
     if (!current) return;
     const actualReps = Number($('sessionActualReps').value);
-    if (!Number.isInteger(actualReps) || actualReps < 1 || actualReps > 999) {
-      message('Укажи фактические повторы от 1 до 999.', true); return;
+    if ($('sessionActualReps').value==='' || !Number.isInteger(actualReps) || actualReps < 0 || actualReps > 999) {
+      message('Укажи фактические повторы от 0 до 999.', true); return;
     }
     ensureAudio();
     current.set.status = 'done';
     current.set.actualReps = actualReps;
     current.set.completedAt = new Date().toISOString();
-    active.restUntil = nextPending(active.sets) && active.restSec > 0 ? Date.now() + active.restSec * 1000 : null;
+    current.set.quality = $('sessionQuality').value;
+    if(active.progressionId)materializeTest(active,current.arm,current.set);
+    if(current.set.maxTest&&actualReps<3)message('Меньше трёх повторений: рабочий блок не сформирован. После занятия выбери более лёгкую пару.',true);
+    const rest=active.restOverride??current.set.restSec??active.restSec;
+    active.restUntil = nextPending(active.sets) && rest > 0 ? Date.now() + rest * 1000 : null;
     lastSignal = '';
     await setMeta('active', active);
     renderSession();
@@ -351,9 +395,10 @@ export async function initTrainingUI() {
   async function undoSet() {
     const active = state.active;
     if (!active) return;
-    const list = [...active.sets.right, ...active.sets.left].filter((set) => set.status === 'done');
+    const list = [...active.sets.right, ...active.sets.left].filter((set) => set.status !== 'pending');
     const last = list.at(-1);
     if (!last) return;
+    if(last.maxTest){state.active.sets.right=state.active.sets.right.filter(s=>s.generatedBy!==last.id);state.active.sets.left=state.active.sets.left.filter(s=>s.generatedBy!==last.id);for(const arm of ARMS)state.active.initialPlan[arm]=state.active.initialPlan[arm].filter(s=>s.generatedBy!==last.id);}
     last.status = 'pending';
     delete last.actualReps;
     delete last.completedAt;
@@ -364,26 +409,45 @@ export async function initTrainingUI() {
 
   async function finishSession() {
     const active = state.active;
-    if (!active || !doneCount(active.sets)) return;
+    if (!active || !ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending')) || saving) return;
+    saving=true;
+    try {
+    const feedback=active.progressionId?await getFeedback(active):{};
+    if(feedback===null)return;
     const now = new Date().toISOString();
-    const sets = completedSets(active.sets);
+    const sets = Object.fromEntries(ARMS.map(a=>[a,active.sets[a].filter(s=>s.status!=='pending')]));
+    for(const arm of ARMS)for(const set of sets[arm])if(feedback[arm]?.technique===false&&set.quality!=='assisted')set.quality='invalid';
     const workout = { id: active.id, title: active.title, sourceTemplateId: active.sourceTemplateId,
+      sourceType:active.sourceType,progressionId:active.progressionId||null,plannedSessionId:active.plannedSessionId||null,progressionContext:active.progressionContext,feedback,goalWeights:active.goalWeights,
       startedAt: active.startedAt, endedAt: now, restSec: active.restSec, initialPlan: active.initialPlan,
-      sets, partial: doneCount(active.sets) < totalCount(active.sets) };
+      sets, partial: ARMS.some(a=>active.initialPlan[a].some(s=>!sets[a].some(actual=>actual.plannedSetId===(s.plannedSetId||s.id)&&actual.status==='done'))) };
     await finishWorkout(workout);
-    state.workouts.push(workout);
-    state.active = null;
+    state=await readAll();
     view = 'home';
     render();
     message(workout.partial ? 'Частичная тренировка сохранена.' : 'Тренировка сохранена.');
     const template = state.templates.find((item) => item.id === workout.sourceTemplateId);
-    if (template && sets.right.length && sets.left.length) {
+    if (!workout.progressionId && template && sets.right.length && sets.left.length) {
       pendingTemplateUpdate = { template, workout };
       const describe = (rows, actual = false) => rows.map((set) =>
         `${pairFor(set.i, set.j).kg.toFixed(1)} кг × ${actual ? set.actualReps : set.reps}`).join(' · ');
       $('updateTemplateSummary').textContent = `«${template.name}»\nБыло — правая: ${describe(template.sets.right)}\nСтанет — правая: ${describe(sets.right, true)}\n\nБыло — левая: ${describe(template.sets.left)}\nСтанет — левая: ${describe(sets.left, true)}\n\nОтдых: ${template.restSec} → ${workout.restSec} с`;
       $('updateTemplateDialog').showModal();
     }
+    } finally {saving=false;}
+  }
+
+  function getFeedback(active) {
+    const dialog=$('feedbackDialog');
+    const select=(name,label,options)=>`<label class="field">${label}<select name="${name}"><option value="">Не оценивал</option>${options}</select></label>`;
+    dialog.innerHTML=`<form id="feedbackForm"><h2>Как прошла тренировка?</h2><p class="muted">Запас — сколько ещё полных повторений оставалось. Без оценки результат сохранится, но повышение не будет подтверждено.</p>${ARMS.filter(a=>active.initialPlan[a].length).map(a=>`<fieldset><legend>${ARM_LABELS[a]} рука</legend>${select(`${a}-technique`,'Полное закрытие без помощи при повторении','<option value="yes">Да</option><option value="no">Нет</option>')}${select(`${a}-pain`,'Была боль?','<option value="no">Нет</option><option value="yes">Да</option>')}${select(`${a}-rir`,'Минимальный запас в рабочих подходах',[0,1,2,3,4].map(n=>`<option value="${n}">${n===4?'4+':n}</option>`).join(''))}${active.initialPlan[a].some(s=>s.topSix)?select(`${a}-topRir`,'Запас в главной шестёрке',[0,1,2,3,4].map(n=>`<option>${n}</option>`).join('')):''}</fieldset>`).join('')}<div class="dialog-actions"><button id="cancelFeedback" class="button" type="button">Назад</button><button class="button button--primary" type="submit">Сохранить тренировку</button></div></form>`;
+    return new Promise(resolve=>{
+      let resolved=false;
+      const finish=value=>{if(resolved)return;resolved=true;dialog.close();resolve(value);};
+      $('cancelFeedback').onclick=()=>finish(null);dialog.oncancel=()=>finish(null);
+      $('feedbackForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);const feedback=Object.fromEntries(ARMS.filter(a=>active.initialPlan[a].length).map(a=>[a,{technique:f.get(`${a}-technique`)===''?null:f.get(`${a}-technique`)==='yes',pain:f.get(`${a}-pain`)===''?null:f.get(`${a}-pain`)==='yes',rir:f.get(`${a}-rir`),topRir:f.get(`${a}-topRir`)}]));finish(feedback);};
+      dialog.showModal();
+    });
   }
 
   async function replaceTemplate() {
@@ -403,6 +467,8 @@ export async function initTrainingUI() {
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const { action, id } = button.dataset;
+    if(action==='open-progression'){progression.open(id);return;}
+    if(action==='restore-import'){await restoreImportedWorkout(id);state=await readAll();view='session';render();return;}
     if (action === 'resume') { view = 'session'; render(); return; }
     if (action === 'skip-rest') { state.active.restUntil = null; await setMeta('active', state.active); renderSession(); return; }
     const template = state.templates.find((item) => item.id === id);
@@ -413,8 +479,8 @@ export async function initTrainingUI() {
     if (action === 'delete-template' && template && confirm(`Удалить шаблон «${template.name}»? История останется.`)) {
       await remove('templates', id); state.templates = state.templates.filter((item) => item.id !== id); renderHome();
     }
-    if (action === 'delete-history' && workout && confirm('Удалить тренировку из истории? Рекорды будут пересчитаны.')) {
-      await remove('workouts', id); state.workouts = state.workouts.filter((item) => item.id !== id); renderHome();
+    if (action === 'delete-history' && workout && confirm(workout.progressionId?'Удалить тренировку? Зачёт программы и рекорды будут пересчитаны; выполненное будущее останется.':'Удалить тренировку из истории? Рекорды будут пересчитаны.')) {
+      await deleteWorkout(id); await reload();
     }
     if (action === 'delete-manual' && confirm('Удалить ручной 1ПМ?')) {
       await remove('manualRecords', id); state.manualRecords = state.manualRecords.filter((item) => item.id !== id); renderHome();
@@ -436,6 +502,11 @@ export async function initTrainingUI() {
       if (!Number.isInteger(reps) || reps < 1 || reps > 999) { message('Плановые повторы: от 1 до 999.', true); renderSession(); return; }
       current.set.reps = reps;
       if (previousActual === previousPlanned) nextActual = reps;
+    } else if(event.target.id==='sessionActualReps') {
+      if(event.target.value==='')delete current.set.draftReps;
+      else current.set.draftReps=Number(event.target.value);
+      await setMeta('active',state.active);return;
+    } else if(event.target.id==='sessionQuality'){current.set.quality=event.target.value;await setMeta('active',state.active);return;
     } else return;
     await setMeta('active', state.active);
     renderSession();
@@ -461,12 +532,16 @@ export async function initTrainingUI() {
     if (!file) return;
     try {
       if (file.size > 20 * 1024 * 1024) throw new Error('Файл слишком большой (более 20 МБ).');
-      const data = validateBackup(JSON.parse(await file.text()));
-      const counts = await mergeBackup(data);
+      const data = validateProgressions(validateBackup(JSON.parse(await file.text())));
+      const choices={};
+      for(const p of data.progressions){const old=state.progressions.find(x=>x.id===p.id);if(old&&JSON.stringify(old)!==JSON.stringify(p))choices[p.id]=confirm(`Программа «${p.name}» отличается от локальной. ОК — импортировать отдельной копией; Отмена — сохранить локальную целиком.`)?'copy':'keep';}
+      if(data.active&&state.active){alert('Локальная тренировка останется активной. Входящее занятие сохранится для последующего продолжения.');choices.active='keep';}
+      if(data.progressions.some(p=>p.status==='active')&&state.progressions.some(p=>p.status==='active'))alert('Локальная программа останется активной. Импортируемые программы будут приостановлены.');
+      const counts = await mergeBackup(data,choices);
       state = await readAll();
       view = state.active ? 'session' : 'home';
       render();
-      message(`Импорт: ${counts.templates} шаблонов, ${counts.workouts} тренировок, ${counts.manualRecords} ручных 1ПМ${counts.active ? ', активная тренировка' : ''}.`);
+      message(`Импорт: ${counts.progressions} программ, ${counts.templates} шаблонов, ${counts.workouts} тренировок, ${counts.manualRecords} ручных 1ПМ${counts.active ? ', активная тренировка' : ''}.`);
     } catch (error) {
       message(`Не удалось импортировать: ${error.message}`, true);
     } finally { $('importTraining').value = ''; }
@@ -479,13 +554,17 @@ export async function initTrainingUI() {
   $('restPanel').addEventListener('click', (event) => homeAction(event).catch(console.error));
   $('backToTraining').addEventListener('click', () => { view = 'home'; render(); });
   $('completeSet').addEventListener('click', () => completeSet().catch(console.error));
+  $('historyFilter').addEventListener('change',e=>{historyFilter=e.target.value;renderHome();});
+  $('sessionContext').addEventListener('click',e=>{if(e.target.id==='openSessionProgression')progression.open(state.active.progressionId);});
+  $('skipSet').addEventListener('click',async()=>{const current=state.active&&nextPending(state.active.sets);if(!current)return;current.set.status='skipped';current.set.completedAt=new Date().toISOString();state.active.restUntil=null;await setMeta('active',state.active);renderSession();});
   $('sessionHero').addEventListener('change', (event) => sessionFieldChanged(event).catch(console.error));
+  $('sessionHero').addEventListener('input', event => {if(event.target.id==='sessionActualReps')sessionFieldChanged(event).catch(console.error);});
   $('sessionQueue').addEventListener('click', (event) => { if (event.target.id === 'undoSet') undoSet().catch(console.error); });
   $('editSessionPlan').addEventListener('click', () => openEditor('session'));
   $('finishTraining').addEventListener('click', () => finishSession().catch(console.error));
   $('cancelTraining').addEventListener('click', async () => {
     if (confirm('Отменить тренировку? Все выполненные подходы этого занятия будут удалены.')) {
-      await setMeta('active', null); state.active = null; view = 'home'; render(); message('Тренировка отменена.');
+      await cancelWorkout(state.active.id); state=await readAll(); view = 'home'; render(); message('Тренировка отменена.');
     }
   });
   $('toggleSound').addEventListener('click', async () => {

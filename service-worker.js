@@ -1,9 +1,11 @@
-const CACHE_NAME = 'hvat-static-v8';
+const CACHE_NAME = 'hvat-static-v9';
 const ASSETS = [
   './', './index.html', './manifest.json', './styles/main.css',
   './js/init.js', './js/ui.js', './js/formulas.js', './js/finders.js',
   './js/grip-animation.js', './js/grip-model.js', './assets/grip-atlas.webp',
   './js/workout-ui.js', './js/workout-db.js', './js/workout-model.js',
+  './js/navigation.js', './js/progression-model.js', './js/progression-presets.js',
+  './js/progression-ui.js', './js/progression-view.js', './js/progression-backup.js',
   './fonts/manrope-variable.ttf', './fonts/sora-variable.ttf',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png',
   './icons/apple-touch-icon.png',

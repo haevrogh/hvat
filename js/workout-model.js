@@ -3,7 +3,7 @@ import { doubleForce, isValidDouble } from './formulas.js';
 export const ARMS = Object.freeze(['right', 'left']);
 export const ARM_LABELS = Object.freeze({ right: 'Правая', left: 'Левая' });
 export const BACKUP_FORMAT = 'hvat-backup';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export const PAIRS = Object.freeze((() => {
   const pairs = [];
@@ -35,8 +35,8 @@ export function createPlan() {
 
 export function copyPlan(sets, useActual = false) {
   return Object.fromEntries(ARMS.map((arm) => [arm, (sets[arm] || []).map((set) => ({
-    id: newId(), i: set.i, j: set.j, kg: pairFor(set.i, set.j).kg,
-    reps: useActual ? set.actualReps : set.reps, status: 'pending',
+    id: newId(), i: set.i, j: set.j, kg: set.kg ?? pairFor(set.i, set.j).kg,
+    reps: useActual ? Math.max(1,set.actualReps || set.reps) : set.reps, status: 'pending',
   }))]));
 }
 
@@ -53,15 +53,11 @@ export function completedSets(sets) {
 }
 
 export function repeatFromHistory(workout) {
-  const right = workout.sets.right;
-  const leftDone = workout.sets.left;
-  if (!right.length) return null;
-  return {
-    right: copyPlan({ right, left: [] }, true).right,
-    left: leftDone.length
-      ? copyPlan({ right: [], left: leftDone }, true).left
-      : copyPlan({ right: [], left: workout.initialPlan.left }).left,
-  };
+  if (!ARMS.some(a=>workout.sets[a].length || workout.initialPlan[a].length)) return null;
+  return Object.fromEntries(ARMS.map(arm=>{
+    const done=workout.sets[arm].filter(s=>s.status==='done');
+    return [arm,copyPlan({[arm]:done.length?done:workout.initialPlan[arm]},!!done.length)[arm]];
+  }));
 }
 
 export function calculateRecords(workouts, manualRecords) {
@@ -73,7 +69,7 @@ export function calculateRecords(workouts, manualRecords) {
   for (const workout of workouts) {
     for (const arm of ARMS) {
       for (const set of workout.sets[arm]) {
-        if (set.actualReps >= 1 && set.actualReps <= 10) {
+        if (set.status === 'done' && !['invalid','assisted'].includes(set.quality) && set.actualReps >= 1 && set.actualReps <= 10) {
           entries.push({ id: `${workout.id}:${set.id}`, arm, reps: set.actualReps,
             kg: set.kg, i: set.i, j: set.j, at: set.completedAt || workout.endedAt,
             source: 'workout', workoutId: workout.id });
@@ -94,29 +90,36 @@ export function calculateRecords(workouts, manualRecords) {
   return { best, events: events.reverse() };
 }
 
-function validId(value) { return typeof value === 'string' && value.length > 0 && value.length <= 120; }
+function validId(value) { return typeof value === 'string' && /^[a-zA-Z0-9:_-]{1,120}$/.test(value); }
 function validDate(value) { return typeof value === 'string' && Number.isFinite(Date.parse(value)); }
 function validRest(value) { return Number.isInteger(value) && value >= 0 && value <= 3600; }
 function validSet(set, completed = false) {
   return set && validId(set.id) && pairFor(set.i, set.j)
     && Number.isInteger(set.reps) && set.reps >= 1 && set.reps <= 999
-    && set.status === (completed ? 'done' : 'pending')
-    && (!completed || (Number.isInteger(set.actualReps) && set.actualReps >= 1
-      && set.actualReps <= 999 && validDate(set.completedAt)));
+    && (completed ? ['done','skipped'].includes(set.status) : set.status === 'pending')
+    && (!completed || set.status === 'skipped' || (Number.isInteger(set.actualReps) && set.actualReps >= 0
+      && set.actualReps <= 999 && validDate(set.completedAt)))
+    && (set.restSec === undefined || validRest(set.restSec))
+    && (set.quality === undefined || ['valid','unknown','invalid','assisted'].includes(set.quality));
 }
 function validPlan(plan, completed = false, allowEmpty = false) {
   return plan && ARMS.every((arm) => Array.isArray(plan[arm])
     && (allowEmpty || plan[arm].length > 0) && plan[arm].every((set) => validSet(set, completed)));
 }
 function validActivePlan(plan) {
-  return plan && ARMS.every((arm) => Array.isArray(plan[arm]) && plan[arm].length > 0
-    && plan[arm].every((set) => validSet(set, set.status === 'done')))
+  return plan && ARMS.some(arm=>plan[arm]?.length) && ARMS.every((arm) => Array.isArray(plan[arm])
+    && plan[arm].every((set) => validSet(set, set.status !== 'pending')))
     && (!plan.left.some((set) => set.status === 'done')
       || !plan.right.some((set) => set.status === 'pending'));
 }
+export function validActiveWorkout(active) {
+  return active && validId(active.id) && typeof active.title === 'string' && active.title.length<=100
+    && validDate(active.startedAt) && validRest(active.restSec) && validPlan(active.initialPlan,false,true)
+    && validActivePlan(active.sets) && (active.restUntil===null || Number.isFinite(active.restUntil));
+}
 
 export function validateBackup(raw) {
-  if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== BACKUP_VERSION || !raw.data) {
+  if (!raw || raw.format !== BACKUP_FORMAT || ![1,2].includes(raw.version) || !raw.data) {
     throw new Error('Неизвестный формат или версия резервной копии.');
   }
   const { templates, workouts, manualRecords, active, settings } = raw.data;
@@ -128,23 +131,22 @@ export function validateBackup(raw) {
       && validPlan(item.sets))) throw new Error('В копии есть повреждённый шаблон.');
   if (!workouts.every((item) => item && validId(item.id) && typeof item.title === 'string'
       && item.title.length <= 100 && validDate(item.startedAt)
-      && validDate(item.endedAt) && validRest(item.restSec) && validPlan(item.initialPlan)
+      && validDate(item.endedAt) && validRest(item.restSec) && validPlan(item.initialPlan,false,true)
       && validPlan(item.sets, true, true)
-      && item.sets.right.length > 0)) throw new Error('В копии есть повреждённая тренировка.');
+      && ARMS.some(a=>item.sets[a].length > 0))) throw new Error('В копии есть повреждённая тренировка.');
   if (!manualRecords.every((item) => item && validId(item.id) && ARMS.includes(item.arm)
       && pairFor(item.i, item.j) && validDate(item.recordedAt))) {
     throw new Error('В копии есть повреждённый ручной рекорд.');
   }
-  if (active !== null && active !== undefined && !(validId(active.id)
-      && typeof active.title === 'string' && active.title.length <= 100
-      && validDate(active.startedAt) && validRest(active.restSec)
-      && validPlan(active.initialPlan) && validActivePlan(active.sets)
-      && (active.restUntil === null || Number.isFinite(active.restUntil)))) {
+  if (active !== null && active !== undefined && !validActiveWorkout(active)) {
     throw new Error('В копии есть повреждённая активная тренировка.');
   }
-  const cleanSet = (set) => ({ ...set, kg: pairFor(set.i, set.j).kg });
+  if(raw.version===2&&raw.data.pendingImports!==undefined&&(!Array.isArray(raw.data.pendingImports)||!raw.data.pendingImports.every(validActiveWorkout)))throw new Error('Повреждено сохранённое импортированное занятие.');
+  const cleanSet = (set) => ({ ...set, kg: set.calcVersion && Number.isFinite(set.kg) ? set.kg : pairFor(set.i, set.j).kg });
   const cleanPlan = (plan) => Object.fromEntries(ARMS.map((arm) => [arm, plan[arm].map(cleanSet)]));
   return {
+    progressions: raw.version === 2 ? (raw.data.progressions || []) : [],
+    pendingImports: raw.version === 2 ? (raw.data.pendingImports || []) : [],
     templates: templates.map((item) => ({ ...item, sets: cleanPlan(item.sets) })),
     workouts: workouts.map((item) => ({ ...item, initialPlan: cleanPlan(item.initialPlan), sets: cleanPlan(item.sets) })),
     manualRecords: manualRecords.map((item) => ({ ...item, kg: pairFor(item.i, item.j).kg })),
