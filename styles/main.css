@@ -232,7 +232,7 @@ body.training-active .wrap, body.training-active.simple-active .wrap { padding-b
 .resume-card { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 16px; padding: 18px; border-radius: 19px; background: linear-gradient(135deg, #0c5864, #073b45); color: #fff; box-shadow: 0 15px 28px rgba(8,67,77,.2); }
 .resume-card.hidden, .button.hidden { display: none; }
 .resume-card small { display: block; margin-top: 4px; opacity: .8; }
-.resume-card .button { background: #f7fffd; }
+.resume-card .button { background: #f7fffd; color: var(--accent-dark); }
 .training-message { position: sticky; top: 8px; z-index: 11; margin-bottom: 12px; padding: 11px 14px; border-radius: 12px; background: #e6f6ed; color: #145539; font-size: 12px; font-weight: 700; box-shadow: 0 7px 20px rgba(0,0,0,.08); }
 .training-message.error { background: #fff1ed; color: #9b4134; }
 
@@ -771,7 +771,7 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
 #progressionRoot summary, #progressionDialog summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
 #progressionRoot progress { width: 100%; height: 10px; margin: 16px 0 0; accent-color: #105c64; }
 #progressionRoot h1 { overflow-wrap: anywhere; }
-#progressionDialog fieldset, #feedbackDialog fieldset { border: 1px solid #b3c9cb; border-radius: 14px; margin: 16px 0; padding: 16px; min-width: 0; }
+#progressionDialog fieldset { border: 1px solid #b3c9cb; border-radius: 14px; margin: 16px 0; padding: 16px; min-width: 0; }
 #progressionDialog textarea { min-height: 76px; width: 100%; resize: vertical; font: inherit; color: inherit; border: 1px solid #a9c4c6; border-radius: 10px; padding: 10px; }
 #progressionDialog .prog-fields { margin-block: 16px; }
 .prog-decision { border-left: 4px solid #146a72; }
@@ -784,8 +784,76 @@ body.simple-active .wrap { padding-bottom: calc(130px + env(safe-area-inset-bott
   .prog-actions .button { flex: 1 1 auto; }
 }
 .prog-summary p { margin: 6px 0; }
+.period-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); padding: 0; margin: 24px 0; gap: 8px; list-style: none; }
+.period-item { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--accent-dark); border-radius: 12px; min-width: 0; }
+.period-item small { color: var(--muted); line-height: 1.5; }
+.period-item.is-current { background: #d9eeea; border-width: 2px; }
+.period-current { color: var(--accent-dark); font-size: 12px; font-weight: 700; }
+.prog-week { margin: 16px 0; padding: 12px 16px; border: 1px solid rgba(25,92,101,.18); border-radius: 12px; background: #fff; }
+.prog-note { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.prog-slot-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.prog-status { color: var(--muted); font-size: 12px; }
+.prog-arm { min-width: 0; }
+.prog-arm p { font-size: 13px; line-height: 1.6; }
+.prog-set-list { margin: 12px 0; padding: 0; list-style: none; }
+.prog-set-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(25,92,101,.12); font-size: 13px; }
+.load-explanation { margin: 12px 0; }
+.load-calculation { border-left: 2px solid var(--accent-dark); padding-left: 12px; }
+.week-statistics { padding: 8px 0; font-size: 13px; line-height: 1.7; color: var(--muted); }
+.week-statistics p { margin: 8px 0; }
+#progressionRoot, #progressionDialog { overflow-wrap: anywhere; }
+#progressionDialog [hidden] { display: none; }
+@media (max-width: 768px) { .period-strip { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 420px) { .prog-week { padding: 8px 12px; } .period-item { padding: 12px; } }
 .prog-summary .prog-overview { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 12px; gap: 12px; }
 .prog-summary .prog-overview p, .prog-summary .prog-overview small { font-size: 12px; line-height: 1.4; }
 .prog-heading { margin-bottom: 12px; }
 .prog-heading h1 { font-size: clamp(24px,5vw,32px); }
 .session-queue-row small { display: block; color: #48646a; }
+
+/* Planning controls use the same field treatment as the training forms. */
+.prog-fields input, .prog-fields select {
+  min-height: 44px; min-width: 0; padding: 8px 12px; border: 1px solid rgba(25,92,101,.18);
+  border-radius: 11px; background: #fff; color: var(--text); font: inherit; font-size: 14px;
+}
+.prog-fields input:focus-visible, .prog-fields select:focus-visible,
+#progressionDialog textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+#progressionDialog .schedule-fieldset { border: 0; border-radius: 0; padding: 0; margin: 24px 0; }
+.schedule-fieldset legend { padding: 0; margin-bottom: 12px; font-weight: 800; font-size: 14px; }
+.schedule-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.schedule-option { min-height: 44px; }
+.schedule-option[aria-pressed="true"], .schedule-day input:checked + span { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+.schedule-option:disabled { opacity: .6; cursor: default; }
+.schedule-days { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px; }
+.schedule-day { position: relative; display: block; min-width: 0; cursor: pointer; }
+.schedule-day input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.schedule-day span { display: flex; justify-content: center; align-items: center; min-height: 44px; padding: 8px 12px; border: 1px solid rgba(25,92,101,.18); border-radius: 11px; background: #fff; color: var(--text); font-size: 13px; font-weight: 800; }
+.schedule-days .schedule-day span { padding-inline: 0; }
+.schedule-day input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.schedule-day input:disabled + span { opacity: .6; cursor: default; }
+.schedule-custom { margin-top: 12px; max-width: 280px; }
+.schedule-date { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+.schedule-extra .field { margin-top: 12px; max-width: 280px; }
+
+.rest-dialog {
+  position: fixed; inset: 0; width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0;
+  padding: max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
+  border: 0; border-radius: 0; background: #eaf5f3; color: var(--text); overflow-y: auto;
+}
+.rest-dialog[open] { display: flex; flex-direction: column; gap: 24px; }
+.rest-dialog::backdrop { background: #eaf5f3; }
+body:has(.rest-dialog[open]) { overflow: hidden; }
+.rest-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rest-dialog__header h2 { margin: 0; font-size: 20px; }
+.rest-dialog__body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+.rest-dialog__time { font-family: "Sora", sans-serif; font-size: clamp(64px,20vw,160px); font-weight: 700; line-height: 1.1; letter-spacing: -.06em; font-variant-numeric: tabular-nums; color: var(--accent-dark); }
+.rest-dialog__next { margin: 0; text-align: center; font-size: 16px; color: var(--muted); }
+.rest-dialog__adjust { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; width: min(100%,360px); }
+.rest-dialog__adjust .button { min-height: 56px; font-size: 18px; }
+.rest-dialog > .button { align-self: center; width: min(100%,480px); }
+#restError { margin: 0; }
+@media (max-height: 450px) {
+  .rest-dialog[open] { gap: 12px; }
+  .rest-dialog__body { gap: 12px; }
+  .rest-dialog__time { font-size: 64px; }
+}

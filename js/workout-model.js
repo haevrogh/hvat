@@ -3,7 +3,7 @@ import { doubleForce, isValidDouble } from './formulas.js';
 export const ARMS = Object.freeze(['right', 'left']);
 export const ARM_LABELS = Object.freeze({ right: 'Правая', left: 'Левая' });
 export const BACKUP_FORMAT = 'hvat-backup';
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export const PAIRS = Object.freeze((() => {
   const pairs = [];
@@ -63,13 +63,13 @@ export function repeatFromHistory(workout) {
 export function calculateRecords(workouts, manualRecords) {
   const entries = [];
   for (const record of manualRecords) {
-    entries.push({ id: record.id, arm: record.arm, reps: 1, kg: record.kg,
+    entries.push({ id: record.id, arm: record.arm, reps: record.reps ?? 1, kg: record.kg,
       i: record.i, j: record.j, at: record.recordedAt, source: 'manual' });
   }
   for (const workout of workouts) {
     for (const arm of ARMS) {
       for (const set of workout.sets[arm]) {
-        if (set.status === 'done' && !['invalid','assisted'].includes(set.quality) && set.actualReps >= 1 && set.actualReps <= 10) {
+        if (set.status === 'done' && !['invalid','assisted'].includes(set.quality) && Number.isInteger(set.actualReps) && set.actualReps >= 1 && set.actualReps <= 999) {
           entries.push({ id: `${workout.id}:${set.id}`, arm, reps: set.actualReps,
             kg: set.kg, i: set.i, j: set.j, at: set.completedAt || workout.endedAt,
             source: 'workout', workoutId: workout.id });
@@ -119,7 +119,8 @@ export function validActiveWorkout(active) {
 }
 
 export function validateBackup(raw) {
-  if (!raw || raw.format !== BACKUP_FORMAT || ![1,2].includes(raw.version) || !raw.data) {
+  if(raw?.format===BACKUP_FORMAT && [1,2].includes(raw.version))throw new Error('Копии версий 1–2 несовместимы с новой прогрессией. Нужна резервная копия версии 3.');
+  if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== BACKUP_VERSION || !raw.data) {
     throw new Error('Неизвестный формат или версия резервной копии.');
   }
   const { templates, workouts, manualRecords, active, settings } = raw.data;
@@ -135,21 +136,22 @@ export function validateBackup(raw) {
       && validPlan(item.sets, true, true)
       && ARMS.some(a=>item.sets[a].length > 0))) throw new Error('В копии есть повреждённая тренировка.');
   if (!manualRecords.every((item) => item && validId(item.id) && ARMS.includes(item.arm)
-      && pairFor(item.i, item.j) && validDate(item.recordedAt))) {
+      && pairFor(item.i, item.j) && validDate(item.recordedAt)
+      && (item.reps === undefined || Number.isInteger(item.reps) && item.reps >= 1 && item.reps <= 10))) {
     throw new Error('В копии есть повреждённый ручной рекорд.');
   }
   if (active !== null && active !== undefined && !validActiveWorkout(active)) {
     throw new Error('В копии есть повреждённая активная тренировка.');
   }
-  if(raw.version===2&&raw.data.pendingImports!==undefined&&(!Array.isArray(raw.data.pendingImports)||!raw.data.pendingImports.every(validActiveWorkout)))throw new Error('Повреждено сохранённое импортированное занятие.');
+  if(raw.data.pendingImports!==undefined&&(!Array.isArray(raw.data.pendingImports)||!raw.data.pendingImports.every(validActiveWorkout)))throw new Error('Повреждено сохранённое импортированное занятие.');
   const cleanSet = (set) => ({ ...set, kg: set.calcVersion && Number.isFinite(set.kg) ? set.kg : pairFor(set.i, set.j).kg });
   const cleanPlan = (plan) => Object.fromEntries(ARMS.map((arm) => [arm, plan[arm].map(cleanSet)]));
   return {
-    progressions: raw.version === 2 ? (raw.data.progressions || []) : [],
-    pendingImports: raw.version === 2 ? (raw.data.pendingImports || []) : [],
+    progressions: raw.data.progressions || [],
+    pendingImports: raw.data.pendingImports || [],
     templates: templates.map((item) => ({ ...item, sets: cleanPlan(item.sets) })),
     workouts: workouts.map((item) => ({ ...item, initialPlan: cleanPlan(item.initialPlan), sets: cleanPlan(item.sets) })),
-    manualRecords: manualRecords.map((item) => ({ ...item, kg: pairFor(item.i, item.j).kg })),
+    manualRecords: manualRecords.map((item) => ({ ...item, reps: item.reps ?? 1, kg: pairFor(item.i, item.j).kg })),
     active: active ? { ...active, initialPlan: cleanPlan(active.initialPlan), sets: cleanPlan(active.sets) } : null,
     settings: { sound: settings.sound !== false },
   };

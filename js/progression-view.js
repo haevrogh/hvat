@@ -1,72 +1,71 @@
 import { ARMS, ARM_LABELS, PAIRS } from './workout-model.js';
-import { METHODS, ROLES, WAVE } from './progression-presets.js';
-import { keyPair, pairKey, progress, currentSlot, waveSuggestion, nextPair } from './progression-model.js';
-export const esc = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const options = (selected, allowed=PAIRS.map(keyPair)) => PAIRS.filter(p=>allowed.includes(keyPair(p))).map(p=>`<option value="${keyPair(p)}" ${selected===keyPair(p)?'selected':''}>${p.kg.toFixed(1)} кг · ${p.i}/${p.j}</option>`).join('');
-export const button=(action,label,extra='',primary=false)=>`<button type="button" class="button ${primary?'button--primary':'button--quiet'}" data-prog="${action}" ${extra}>${label}</button>`;
-const statuses={draft:'Черновик',active:'Активна',paused:'На паузе',completed:'Завершена',archived:'Архив',planned:'Запланировано',partial:'Частично',modified:'Завершено с изменениями',skipped:'Пропущено',replaced:'Заменено'};
-export const status=v=>statuses[v]||v;
-export function setsView(rows) {
-  if(!rows.length)return '<p class="muted">Нет назначений</p>';
-  const groups=[];
-  for(const s of rows){const last=groups.at(-1);if(last&&last.i===s.i&&last.j===s.j&&last.reps===s.reps&&last.role===s.role&&last.repMax===s.repMax)last.count++;else groups.push({...s,count:1});}
-  return groups.map(s=>`<div class="prog-set"><span>${ROLES[s.role]||'Подход'}${s.count>1?` · ${s.count} подхода`:''}</span><strong>${s.kg.toFixed(1)} кг × ${s.maxTest?'максимум':s.repMax?`${s.reps}–${s.repMax}`:s.reps}</strong><small>Пружины ${s.i} / ${s.j} · отдых ${s.restSec??0} с</small></div>`).join('');
+import { PERIODS, ROLES } from './progression-presets.js';
+import { keyPair, currentSlot, progress, loadStats, localToday, MAX_WEIGHT } from './progression-model.js';
+
+export const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+export const button = (action, label, extra = '', primary = false) => `<button type="button" class="button${primary ? ' button--primary' : ''}" data-prog="${action}" ${extra}>${label}</button>`;
+export const displayDate = value => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`));
+const number = n => Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+export const options = selected => PAIRS.map(p => `<option value="${keyPair(p)}" ${selected === keyPair(p) ? 'selected' : ''}>${number(p.kg)} кг · ${p.i} / ${p.j}</option>`).join('');
+const statuses = { draft: 'Черновик', active: 'Активна', paused: 'Приостановлена', completed: 'Завершена', archived: 'В архиве', planned: 'По плану', partial: 'Частично', skipped: 'Пропущено', modified: 'Завершено с отклонениями' };
+export function armForm(config, arm) {
+  return `<fieldset class="schedule-fieldset"><legend>${ARM_LABELS[arm]} рука · исходный 1ПМ</legend>
+    <label class="field">Способ ввода<select name="${arm}-mode" data-base-mode="${arm}"><option value="kg" ${config.inputMode === 'kg' ? 'selected' : ''}>Известный 1ПМ в кг</option><option value="pair" ${config.inputMode === 'pair' ? 'selected' : ''}>Закрываемая пара пружин</option></select></label>
+    <label class="field" ${config.inputMode !== 'kg' ? 'hidden' : ''} data-base-field="${arm}-kg">1ПМ, кг<input name="${arm}-base" type="number" min="0.1" max="${MAX_WEIGHT}" step="0.1" value="${config.base}" ${config.inputMode === 'kg' ? 'required' : ''}></label>
+    <label class="field" ${config.inputMode !== 'pair' ? 'hidden' : ''} data-base-field="${arm}-pair">Пара пружин<select name="${arm}-pair">${options(config.pair)}</select></label>
+    ${config.recordAt ? `<p class="prog-note">Подставлен подтверждённый рекорд: ${number(config.base)} кг. Проверь, актуален ли он.</p>` : ''}
+    <label class="prog-check"><input name="${arm}-confirmed" type="checkbox" ${config.baseConfirmed ? 'checked' : ''} required>Подтверждаю исходный 1ПМ ${arm === 'right' ? 'правой' : 'левой'} руки</label>
+  </fieldset>`;
 }
-export function slotView(slot, details=false) {
-  return `<article class="prog-slot ${slot.closed?'is-closed':''}" id="slot-${esc(slot.id)}"><div class="prog-line"><h3>Неделя ${slot.week} · ${slot.index%2?'Б':'А'}</h3><span class="count-pill">${status(slot.status)}</span></div><p class="muted">${esc(slot.date)}${slot.preliminary?' · Предварительно: зависит от выполнения':''}</p>
-    <div class="prog-arms">${ARMS.filter(a=>slot.arms[a]).map(a=>`<div><h4>${ARM_LABELS[a]} рука</h4><p class="muted">${esc(slot.arms[a].label)}${slot.arms[a].phase?` · ${esc(slot.arms[a].phase)}`:''}</p>${setsView(slot.plan[a])}</div>`).join('')}</div>
-    ${details?`<div class="prog-actions">${!slot.attempts.length&&slot.status==='planned'?button('edit-slot','Изменить',`data-id="${slot.id}"`):''}${button('move','Перенести',`data-id="${slot.id}"`)}${slot.attempts.length?button('attempts','План и факт',`data-id="${slot.id}"`)+button('retry','Повторить занятие программы',`data-id="${slot.id}"`):''}${!slot.closed?button('skip','Пропустить',`data-id="${slot.id}"`):''}${slot.needsResolution?button('resolve-deletion','Оставить пропуск',`data-id="${slot.id}"`):''}</div>`:''}</article>`;
+export function periodStrip(p) {
+  const current = currentSlot(p);
+  return `<ol class="period-strip" aria-label="Периоды подготовки">${p.blocks.map(b => `<li class="period-item${current?.blockId === b.id ? ' is-current' : ''}"><strong>${b.label}</strong><span>${b.weeks} нед.</span><small>${displayDate(b.startDate)} — ${displayDate(b.endDate)}</small>${current?.blockId === b.id ? '<span class="period-current">Текущий период</span>' : ''}</li>`).join('')}</ol>`;
 }
-export function decisionsView(p) {
-  return ARMS.filter(a=>p.arms[a]?.pending).map(a=>{
-    const s=p.arms[a],c=p.config.arms[a],pending=s.pending,extra=`data-arm="${a}"`;
-    let controls='';
-    if(pending.type==='wave'||pending.type==='after-test') {
-      const suggestion=waveSuggestion(s);
-      controls=`<p>Силовая: ${suggestion.aOK?'три рабочих занятия подтверждены':'уровень пока не освоен'}. Объёмная: ${suggestion.bOK?'три рабочих занятия подтверждены':'уровень пока не освоен'}.</p>
-      <div class="prog-fields">${['a','b'].map((d,i)=>`<label>${i?'Объёмная':'Силовая'} — следующий уровень<select id="decision-${a}-${d}">${[1,2,3,4].map(n=>`<option ${n===suggestion[d]?'selected':''}>${n}</option>`).join('')}</select></label>`).join('')}</div>
-      ${suggestion.nextStage?`<label class="prog-check"><input id="stage-${a}" type="checkbox" checked>Перейти к этапу 2 с первого уровня</label>`:''}${button('decide-wave','Подтвердить следующую волну',extra,true)}${s.goalDone?button('finish-arm','Цель достигнута — закончить эту руку',extra):''}`;
-    } else if(pending.type==='taper')controls=button('decide-taper','Назначить подводку и тест',extra,true)+button('decide-keep','Оставить разгрузку',extra);
-    else if(pending.type==='retest')controls=`<label class="field">Вес нового теста<select id="retest-${a}">${options(s.pair,c.allowed)}</select></label>${button('decide-retest','Назначить новый тест',extra,true)}`;
-    else {const next=nextPair(c,pairKey(s.pair));controls=`<p>${next?`Следующая пара: ${next.kg.toFixed(1)} кг · ${next.i}/${next.j}`:'Достигнута самая тяжёлая доступная пара.'}</p>${next?button('decide-increase','Повысить вес',extra,true):''}${button('decide-keep','Оставить текущий вес',extra)}`;}
-    return `<div class="training-panel prog-decision"><h3>${ARM_LABELS[a]} · следующий шаг</h3><p>${esc(pending.reason)}</p><div class="prog-actions">${controls}</div></div>`;
-  }).join('');
+function calculation(assignment) {
+  return `<details class="load-explanation"><summary>Как подобрана нагрузка</summary><p>Расчётная база: ${number(assignment.baseKg)} кг. Это ориентир для назначения нагрузки.</p>
+    ${assignment.groups.map(g => `<div class="load-calculation"><p>Цель: ${number(g.ideal.kg)} кг (${number(g.ideal.percent)}%) · ${g.ideal.sets}×${g.ideal.reps}.</p>
+      ${g.unavailable ? '<p class="form-error">Нет достаточно лёгкой пары пружин для этого назначения.</p>' : `<p>План: ${number(g.kg)} кг (${number(g.intensity)}%) · ${g.reps.join(' + ')} повторений.</p><p>Объём: ${number(g.ideal.kg * g.ideal.sets * g.ideal.reps)} → ${number(g.kg * g.reps.reduce((a, b) => a + b, 0))} кг.</p>
+      ${g.capped ? '<p>Достигнут предел эспандера. Дополнительные повторения приближают плановый объём; они не подтверждают новый 1ПМ.</p>' : g.fallback ? '<p>Вблизи целевого процента пары нет: взята ближайшая доступная снизу.</p>' : ''}`}</div>`).join('')}
+    <p>Статистика занятия включает разминку. Совпадение объёма не означает одинаковое силовое воздействие.</p></details>`;
 }
-export function programView(p,active,all,workouts=[]) {
-  const stats=progress(p),slot=currentSlot(p),last=p.slots.at(-1);
-  const pain=p.slots.some(s=>s.evaluations&&Object.values(s.evaluations).some(e=>e.reason.startsWith('Боль:'))&&s.index>=Math.max(0,(slot?.index??p.slots.length)-1));
-  const bestSix=arm=>workouts.filter(w=>w.progressionId===p.id&&w.feedback?.[arm]?.technique===true&&w.feedback?.[arm]?.pain===false).flatMap(w=>w.sets[arm]).filter(s=>s.status==='done'&&s.actualReps>=6&&!['invalid','assisted'].includes(s.quality)).sort((a,b)=>b.kg-a.kg||b.actualReps-a.actualReps)[0];
-  return `<div class="training-heading prog-heading"><div><p class="eyebrow">ДВЕ РУКИ · СВОЙ ТЕМП</p><h1>${esc(p.name)}</h1><p class="training-lead">${status(p.status)} · ${slot?`Неделя ${slot.week} из ${Math.ceil(p.slots.length/2)}`:'Плановый период пройден'}</p></div></div>
-    <label class="field">Мои программы<select id="programSelect">${all.map(x=>`<option value="${x.id}" ${p.id===x.id?'selected':''}>${esc(x.name)} · ${status(x.status)}</option>`).join('')}</select></label>
-    <div class="training-panel prog-summary"><div class="prog-line"><strong>${stats.done} из ${stats.total} занятий</strong><span>${stats.percent}%</span></div><progress max="100" value="${stats.percent}" aria-label="Прохождение программы"></progress><p class="muted">Частичных: ${stats.partial} · пропущенных: ${stats.skipped} · план до ${esc(last?.date)}${p.config.horizon?` · ориентир ${p.config.horizon} недель`:''}</p>
-    <div class="prog-arms prog-overview">${ARMS.filter(a=>p.arms[a]).map(a=>`<div><strong>${ARM_LABELS[a]}</strong><p>${METHODS[p.arms[a].method]}</p><small>${p.arms[a].method==='wave'?`Этап ${p.arms[a].stage} · волна ${p.arms[a].wave} · уровни А/Б ${p.arms[a].levelA}/${p.arms[a].levelB} · цель ${pairKey(p.config.arms[a].goal).kg} × 6`:`Блок ${p.arms[a].block} · ${pairKey(p.arms[a].pair).kg} кг`}${p.arms[a].goalDone?' · цель подтверждена':''}</small></div>`).join('')}</div></div>
-    ${pain?`<div class="training-panel prog-decision"><h3>В прошлом занятии отмечена боль</h3><p>Прекрати тяжёлую работу при боли. Повышение не предлагается.</p>${button('pause','Пауза')}${button('future-settings','Пересмотреть назначения')}</div>`:''}
-    ${p.needsExtension?`<div class="training-panel"><p>${esc(p.needsExtension.reason)} Предлагается +4 недели; продолжительность и процент будут пересчитаны.</p>${button('extend-wave','Добавить повторную волну')}${button('keep-period','Оставить период')}</div>`:''}
-    ${p.slots.filter(s=>s.needsResolution).map(s=>`<div class="training-panel"><p>Удалена зачтённая запись недели ${s.week}. Более поздние занятия сохранены.</p>${button('retry','Повторить',`data-id="${s.id}"`)}${button('resolve-deletion','Оставить пропуск',`data-id="${s.id}"`)}</div>`).join('')}
-    ${ARMS.some(a=>bestSix(a))?`<details class="training-panel"><summary>Подтверждённые результаты</summary>${ARMS.filter(a=>bestSix(a)).map(a=>`<p>${ARM_LABELS[a]}: ${bestSix(a).kg} кг × ${bestSix(a).actualReps}. Это достигнутый подход, не расчётный 6ПМ.</p>`).join('')}</details>`:''}
-    ${decisionsView(p)}
-    ${p.decisions.at(-1)?.type==='extend'?'<p class="training-message">Период продлён. Общее число занятий увеличилось, поэтому процент прохождения мог уменьшиться.</p>':''}
-    ${active?`<div class="resume-card"><div><strong>Есть незавершённая тренировка</strong><small>${esc(active.title)}</small></div>${button('resume','Продолжить','',true)}</div>`:slot?`<div class="training-panel"><p class="eyebrow">СЛЕДУЮЩЕЕ ЗАНЯТИЕ</p>${slotView(slot)}<div class="prog-actions">${p.status==='active'&&!Object.values(p.arms).some(s=>s.pending)?button('start','Начать тренировку',`data-id="${slot.id}"`,true):''}${slot.status==='partial'?button('advance-partial','Продолжить программу без зачёта',`data-id="${slot.id}"`):''}</div></div>`:'<div class="training-panel"><h2>Период закончился</h2><p>Незавершённые блоки сохраняются. Можно продлить план или завершить программу.</p></div>'}
-    <details class="training-panel"><summary>Вся программа · ${Math.ceil(p.slots.length/2)} недель</summary>${button('current','К текущей неделе')}${Array.from({length:Math.ceil(p.slots.length/8)},(_,i)=>`<details class="prog-wave" ${slot&&Math.floor(slot.index/8)===i?'open':''}><summary>Недели ${i*4+1}–${Math.min(i*4+4,Math.ceil(p.slots.length/2))}</summary>${p.slots.slice(i*8,i*8+8).map(s=>slotView(s,true)).join('')}</details>`).join('')}</details>
-    <details class="training-panel"><summary>Управление программой</summary><div class="prog-actions">${['draft','paused'].includes(p.status)?button('activate',p.status==='draft'?'Запустить':'Продолжить'):''}${p.status==='active'?button('pause','Приостановить'):''}${button('future-settings','Будущие настройки')}${button('extend','Продлить период')}${button('history','История программы')}${button('finish','Завершить досрочно')}${button('archive','В архив')}${button('create','Новая прогрессия')}</div></details>
-    <details class="training-panel"><summary>История решений · ${p.decisions.length}</summary>${p.decisions.length?p.decisions.map(d=>`<p>${esc(d.at?.slice(0,10))} · ${esc(d.arm?ARM_LABELS[d.arm]:'')} ${esc(d.pending?.reason||d.reason||d.type||'Изменение плана')} ${d.choice?`→ ${esc(d.choice.action)}`:''}</p>`).join(''):'<p>Изменений пока нет.</p>'}</details>`;
+export function slotView(slot, controls = '') {
+  return `<article class="prog-slot" id="slot-${slot.id}"><div class="prog-slot-heading"><h3>${displayDate(slot.date)} · ${slot.arms.right.label}</h3><span class="prog-status">${statuses[slot.status] || slot.status}${slot.status === 'planned' && slot.date < localToday() ? ' · дата прошла' : ''}</span></div>
+    <p class="prog-note">${PERIODS.find(p => p.key === slot.period).label} · неделя периода ${slot.periodWeek} / ${slot.periodWeeks} · ${slot.arms.right.phase}</p>
+    <div class="prog-arms">${ARMS.map(arm => { const a = slot.arms[arm]; return `<section class="prog-arm"><h4>${ARM_LABELS[arm]} рука</h4><p>${esc(a.cue)}</p>
+      ${a.unavailable ? '<p class="form-error">Нет подходящей нагрузки: минимальная пара тяжелее задания. Это занятие можно пропустить.</p>' : `<ol class="prog-set-list">${slot.plan[arm].map(s => `<li><span>${ROLES[s.role]} · ${number(s.kg)} кг · ${s.i}/${s.j}</span><strong>${s.reps} повт.</strong></li>`).join('')}</ol><p class="prog-note">Отдых: ${a.ideal.restSec} с${a.groups.some(g => g.capped) ? ' · предел веса компенсирован повторениями' : ''}</p>`}
+      ${slot.evaluations?.[arm] ? `<p>${esc(slot.evaluations[arm].reason)}</p>` : ''}${calculation(a)}</section>`; }).join('')}</div>${controls}</article>`;
 }
-export function armForm(config,arm) {
-  const c=config,a=ARM_LABELS[arm];
-  const weights=[...new Set(Object.values(WAVE).flatMap(t=>[...t.a.flat(),...t.b.flat(),...t.deload.map(d=>d[0])]).concat([66.9,73.8,79.9,90.6,93.7]))].sort((a,b)=>a-b);
-  return `<h2>${a} рука</h2><label class="field">Методика<select name="method" id="armMethod">${Object.entries(METHODS).map(([k,v])=>`<option value="${k}" ${c.method===k?'selected':''}>${v}</option>`).join('')}</select></label>
-  <p class="muted">${c.method==='wave'?'Два направления нагрузки, три рабочие недели и разгрузка. Повышение по подтверждённым результатам.':c.method==='double'?'Набирай повторы в диапазоне. Когда верхняя граница достигнута во всех подходах — следующий вес.':'Тест N, затем 4×(N−2). По одному повторению за успешное занятие до 4×N. Недобор возвращает к началу блока.'}</p>
-  <label class="field">${c.method==='ladder'?'Вес первого теста · ориентир из 10ПМ':'Исходная рабочая пара'}<select name="pair">${options(c.pair)}</select></label>
-  ${c.method==='ladder'?`<p class="muted">${c.hasRecord10?'Предложен вес записи на 10 повторений этой руки.':'Записи на 10 повторений нет. Выбери доступный вес для теста самостоятельно.'}</p><label class="prog-check"><input name="pairConfirmed" type="checkbox" ${c.pairConfirmed?'checked':''} required>Подтверждаю вес первого теста</label>`:''}
-  ${c.method==='double'?`<div class="prog-fields"><label>Подходы<input name="sets" type="number" min="1" max="20" value="${c.sets}" required></label><label>От повторов<input name="low" type="number" min="1" max="999" value="${c.low}" required></label><label>До повторов<input name="high" type="number" min="1" max="999" value="${c.high}" required></label></div>`:''}
-  <label class="field">Отдых, секунд<input name="rest" type="number" min="0" max="3600" value="${c.rest}" required></label>
-  ${c.method==='wave'?`<label class="field">Исходный 1ПМ, кг · ориентир<input name="base" type="number" min="1" step="0.1" value="${c.base}" required></label><label class="prog-check"><input name="baseConfirmed" type="checkbox" ${c.baseConfirmed?'checked':''} required>Подтверждаю показатель этой руки. Это не новая запись рекорда.</label>
-  <details><summary>Исходная повторная работа · необязательно</summary><p>Сохраняется как ориентир, без пересчёта в «точный» 1ПМ.</p><label class="field">Пара<select name="referencePair"><option value="">Не указана</option>${options(c.referencePair||'')}</select></label><div class="prog-fields"><label>Подходы<input name="referenceSets" type="number" min="1" max="20" value="${c.referenceSets||''}"></label><label>Повторы<input name="referenceReps" type="number" min="1" max="999" value="${c.referenceReps||''}"></label></div></details>
-  <div class="prog-fields"><label>Начальный уровень А<input name="initialA" type="number" min="1" max="4" value="${c.initialA}"></label><label>Начальный уровень Б<input name="initialB" type="number" min="1" max="4" value="${c.initialB}"></label><label>Отдых Б, с<input name="restB" type="number" min="0" max="3600" value="${c.restB}"></label><label>Разгрузка, с<input name="restDeload" type="number" min="0" max="3600" value="${c.restDeload}"></label></div>
-  <label class="field">Цель · шесть закрытий<select name="goal">${options(c.goal)}</select></label><p class="muted">100 кг нет в каталоге: 99,4 кг ниже 100, 104,0 кг выше. Выбор пары определяет саму цель.</p>
-  <label class="field">Готовность к тесту · шестёрка с запасом ≥1<select name="readiness">${options(c.readiness)}</select></label>
-  <details><summary>Проверить и изменить лестницу весов</summary><p>Базовый профиль: 1ПМ около 100 кг, повторная работа около 67,8 кг 5×11. При другом профиле или цели пересмотри назначения. Вес не масштабируется автоматически.</p><div class="prog-fields">${weights.map(kg=>`<label>${kg} кг →<select name="override-${kg}">${options(c.overrides[String(kg)]||keyPair(PAIRS.find(p=>p.kg===kg)))}</select></label>`).join('')}</div></details>
-  <label class="prog-check"><input name="reviewed" type="checkbox" ${c.reviewed?'checked':''} required>Проверил исходный профиль, лестницу, готовность и цель. Назначения подходят для этой руки.</label>`:''}
-  <label class="field">Стандарт закрытия<textarea name="standard" maxlength="500">${esc(c.standard)}</textarea></label>
-  <details><summary>Доступные пары · ${c.allowed.length} из ${PAIRS.length}</summary><p class="muted">Используются только отмеченные пары. Замены на более лёгкие будут показаны перед запуском.</p><div class="prog-pairs">${PAIRS.map(p=>`<label class="prog-check"><input name="allowed" type="checkbox" value="${keyPair(p)}" ${c.allowed.includes(keyPair(p))?'checked':''}>${p.kg} кг · ${p.i}/${p.j}</label>`).join('')}</div></details>`;
+function weekStats(p, week, workouts) {
+  const slots = p.slots.filter(s => s.week === week);
+  return `<div class="week-statistics">${ARMS.map(arm => {
+    const base = slots[0].arms[arm].baseKg, rows = slots.flatMap(s => s.plan[arm]);
+    const stats = loadStats(rows, base);
+    const actual = loadStats(workouts.filter(w => w.progressionId === p.id && slots.some(s => s.id === w.plannedSessionId)).flatMap(w => w.sets[arm]), base, true);
+    return `<p><strong>${ARM_LABELS[arm]}:</strong> база ${number(base)} кг · ${stats.repetitions} повторений · объём ${number(stats.tonnage)} кг · средняя интенсивность ${number(stats.intensity)}%${actual.sets ? `<br>Выполнено: ${actual.repetitions} повторений · ${number(actual.tonnage)} кг · ${number(actual.intensity)}%` : ''}</p>`;
+  }).join('')}</div>`;
+}
+export function planView(p, workouts = [], active = null, interactive = false) {
+  const next = currentSlot(p);
+  return `${periodStrip(p)}${p.config.weeks < 26 ? '<p class="prog-note">Сокращённая адаптация HVAT: длительность периодов меньше полной схемы LMS.</p>' : ''}
+    <div class="prog-weeks">${Array.from({ length: p.config.weeks }, (_, i) => {
+      const slots = p.slots.filter(s => s.week === i + 1), block = p.blocks.find(b => b.id === slots[0].blockId);
+      return `<details class="prog-week" ${i + 1 === (next?.week || 1) ? 'open' : ''}><summary>Неделя ${i + 1} · ${block.label} · ${displayDate(slots[0].date)}</summary>${weekStats(p, i + 1, workouts)}${slots.map(s => {
+        let controls = '';
+        if (interactive && s.id === next?.id && p.status === 'active' && !active) controls = `<div class="prog-actions">${!ARMS.some(a => s.arms[a].unavailable) ? button('start', s.status === 'partial' ? 'Повторить занятие' : 'Начать занятие', `data-id="${s.id}"`, true) : ''}${button('skip', 'Пропустить занятие', `data-id="${s.id}"`)}</div>`;
+        return slotView(s, controls);
+      }).join('')}</details>`;
+    }).join('')}</div>`;
+}
+export function programView(p, active, programs, workouts) {
+  const done = progress(p), next = currentSlot(p);
+  return `<div class="training-heading"><h1>${esc(p.name)}</h1>${button('create', 'Новая программа')}</div>
+    ${programs.length > 1 ? `<label class="field">Программа<select id="programSelect">${programs.map(x => `<option value="${x.id}" ${x.id === p.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>` : ''}
+    <section class="training-panel"><p class="eyebrow">${statuses[p.status]} · ${p.config.weeks} недель · три тренировки в неделю</p><h2>Пик ${displayDate(p.config.targetDate)}</h2>
+      <p>Начало ${displayDate(p.config.start)} · выполнено ${done.done} / ${done.total} занятий (${done.percent}%). Пропущено: ${done.skipped}.</p>
+      <p class="prog-note">Расчётная база растёт на 1% в неделю. Фактические рекорды появляются только после выполнения.</p>
+      <div class="prog-actions">${active?.progressionId === p.id ? button('resume', 'Продолжить тренировку', '', true) : next && p.status === 'active' ? button('current', 'К ближайшему занятию', '', true) : ''}
+      ${p.status === 'active' ? button('pause', 'Приостановить') : ['draft', 'paused'].includes(p.status) ? button('activate', 'Запустить', '', true) : ''}
+      ${['active', 'paused'].includes(p.status) ? button('finish', 'Завершить программу') : ''}${p.status !== 'archived' ? button('archive', 'В архив') : ''}${button('history', 'Журнал программы')}</div>
+      ${p.status === 'paused' ? '<p>Даты и нагрузки сохраняются во время паузы.</p>' : ''}</section>
+    ${planView(p, workouts, active, true)}`;
 }

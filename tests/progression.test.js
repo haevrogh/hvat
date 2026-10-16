@@ -1,106 +1,151 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultArm,createProgression,currentSlot,applyWorkout,materializeTest,decide,progress,assignment,lowerPair,extend,waveSuggestion } from '../js/progression-model.js';
-import { validateBackup,PAIRS } from '../js/workout-model.js';
-import { validateProgressions,copyProgressionGraph } from '../js/progression-backup.js';
-const config=method=>({...defaultArm(method),baseConfirmed:true,reviewed:true});
-const program=(right='double',left=null)=>createProgression({name:'Тест',start:'2026-09-28',weeks:32,days:[1,5],arms:{right:right?config(right):null,left:left?config(left):null}});
-const quality={technique:true,pain:false,rir:'2',topRir:'1'};
-function workout(p,alter=()=>{},slot=currentSlot(p)) {
-  const w={id:crypto.randomUUID(),title:'Занятие',progressionId:p.id,plannedSessionId:slot.id,
-    initialPlan:structuredClone(slot.plan),sets:structuredClone(slot.plan),startedAt:new Date().toISOString(),endedAt:new Date().toISOString(),restSec:0,feedback:{right:quality,left:quality}};
-  for(const arm of ['right','left'])for(const s of w.sets[arm])Object.assign(s,{status:'done',actualReps:s.reps,quality:'valid',completedAt:w.endedAt});
-  alter(w);return w;
-}
-test('all wave weights are real pairs; first A and B match approved preset',()=>{
-  const p=program('wave');assert.equal(p.slots.length,64);
-  assert.deepEqual(p.slots[0].plan.right.filter(s=>s.role==='main').map(s=>[s.i,s.j,s.reps]),Array(4).fill([3,12,4]));
-  assert.equal(p.slots[1].plan.right.find(s=>s.role==='main').kg,67.8);
-  assert.ok(p.slots.every(s=>s.plan.right.every(r=>PAIRS.some(p=>p.i===r.i&&p.j===r.j))));
-  assert.equal(p.slots[32].arms.right.stage,2);
-});
-test('independent double progression only proposes the successful arm',()=>{
-  let p=program('double','double');p=applyWorkout(p,workout(p,w=>{w.sets.right.forEach(s=>s.actualReps=10);w.sets.left[0].actualReps=2;}));
-  assert.equal(p.arms.right.pending.type,'increase');assert.equal(p.arms.left.pending,null);
-  p=decide(p,'right',{action:'increase'});assert.notEqual(p.arms.right.pair,p.arms.left.pair);
-  assert.equal(currentSlot(p).plan.right[0].reps,6);
-});
-test('maximum test generates four N-2 sets and nine successful sessions complete the block',()=>{
-  let p=program('ladder');
-  let w=workout(p);w.sets.right[0].actualReps=9;materializeTest(w,'right',w.sets.right[0]);
-  assert.deepEqual(w.sets.right.slice(1).map(s=>s.reps),[7,7,7,7]);
-  for(const s of w.sets.right.slice(1))Object.assign(s,{status:'done',actualReps:s.reps,completedAt:w.endedAt});
-  p=applyWorkout(p,w);assert.equal(p.arms.right.step,1);
-  assert.deepEqual(currentSlot(p).plan.right.map(s=>s.reps),[8,7,7,7]);
-  for(let i=0;i<8;i++)p=applyWorkout(p,workout(p));
-  assert.equal(progress(p).done,9);assert.equal(p.arms.right.pending.type,'increase');
-  p=decide(p,'right',{action:'increase'});assert.equal(p.arms.right.n,null);assert.equal(currentSlot(p).plan.right[0].maxTest,true);
-});
-test('shortfall resets ladder to baseline, unknown feedback never advances, other arm independent',()=>{
-  let p=program('ladder','double');p.arms.right.n=9;p.arms.right.step=3;
-  // Regenerate from a persisted state using the same public extension path.
-  p=extend(p,1);
-  let w=workout(p,x=>{x.sets.right[0].actualReps=1;x.sets.left.forEach(s=>s.actualReps=10);});p=applyWorkout(p,w);
-  assert.equal(p.arms.right.step,0);assert.equal(p.arms.right.n,9);assert.equal(p.arms.left.pending.type,'increase');
-  assert.deepEqual(currentSlot(p).plan.right.map(s=>s.reps),[7,7,7,7]);
-  w=workout(p,x=>x.feedback.right={});p=applyWorkout(p,w);assert.equal(p.arms.right.step,0);
-});
-test('partial attempts preserve progress, retries credit once and do not double advance',()=>{
-  let p=program('double','double');const slotId=currentSlot(p).id;
-  let w=workout(p,x=>{x.sets.left=[];x.sets.right.forEach(s=>s.actualReps=10);});p=applyWorkout(p,w);
-  assert.equal(progress(p).done,0);assert.equal(currentSlot(p).id,slotId);
-  const retry=workout(p);p=applyWorkout(p,retry);assert.equal(progress(p).done,1);
-  assert.equal(applyWorkout(p,retry).slots[0].attempts.length,2);
-});
-test('zero max cannot generate invalid sets; missing feedback and pain block increases',()=>{
-  let p=program(null,'ladder'),w=workout(p);w.sets.left[0].actualReps=0;materializeTest(w,'left',w.sets.left[0]);
-  assert.equal(w.sets.left.length,1);p=applyWorkout(p,w);assert.equal(p.arms.left.pending.type,'retest');
-  p=program('double');w=workout(p,x=>{x.sets.right.forEach(s=>s.actualReps=10);x.feedback.right={technique:true,pain:true};});p=applyWorkout(p,w);assert.equal(p.arms.right.pending,null);
-});
-test('program backup graph survives validation and remapping without mixing identities',()=>{
-  let p=program(null,'double');const w=workout(p);p=applyWorkout(p,w);
-  const raw={format:'hvat-backup',version:2,data:{templates:[],workouts:[w],manualRecords:[],active:null,settings:{sound:true},progressions:[p]}};
-  const data=validateProgressions(validateBackup(raw));assert.equal(data.workouts[0].sets.right.length,0);
-  const copy=copyProgressionGraph(p,[w],null);assert.notEqual(copy.program.id,p.id);assert.equal(copy.workouts[0].progressionId,copy.program.id);
-  assert.equal(copy.program.slots[0].attempts[0],copy.workouts[0].id);
-  validateProgressions({...data,workouts:copy.workouts,progressions:[copy.program]});
-  raw.data.progressions[0].slots[0].attempts.push('missing');assert.throws(()=>validateProgressions(validateBackup(raw)),/связи/);
-});
-test('no rounding upward, extension changes denominator but preserves historical plan',()=>{
-  const c=config('double');c.allowed=['7-12','9-11'];assert.equal(lowerPair(c,100).kg,99.4);assert.throws(()=>lowerPair(c,90));
-  let p=program('double');p=applyWorkout(p,workout(p));const before=structuredClone(p.slots[0]);p=extend(p,4);
-  assert.equal(p.slots.length,72);assert.deepEqual(p.slots[0],before);assert.equal(progress(p).done,1);
-});
+import { ARMS, PAIRS, calculateRecords, validateBackup, BACKUP_VERSION } from '../js/workout-model.js';
+import { allocatePeriods, generateCalendar, weeklyBase, idealLoad, fitLoad, createProgression, defaultArm, clone, applyWorkout, skipSlot, stopControlAttempts, loadStats, addDays } from '../js/progression-model.js';
+import { validateProgressions, copyProgressionGraph } from '../js/progression-backup.js';
+import { PERIODS } from '../js/progression-presets.js';
 
-test('wave promotion uses three successful sessions per direction and all four levels before stage 2',()=>{
-  let p=program('wave');
-  for(let level=1;level<=4;level++) {
-    for(let i=0;i<8;i++)p=applyWorkout(p,workout(p));
-    const suggestion=waveSuggestion(p.arms.right);
-    assert.equal(suggestion.aOK,true);assert.equal(suggestion.bOK,true);
-    assert.equal(suggestion.nextStage,level===4);
-    p=decide(p,'right',{action:'wave',a:suggestion.a,b:suggestion.b,nextStage:suggestion.nextStage});
-  }
-  assert.equal(p.arms.right.stage,2);assert.equal(currentSlot(p).index,32);
-  for(let level=1;level<=4;level++) {
-    for(let i=0;i<6;i++)p=applyWorkout(p,workout(p));
-    if(level===4){assert.equal(p.arms.right.pending.type,'taper');break;}
-    for(let i=0;i<2;i++)p=applyWorkout(p,workout(p));
-    const suggestion=waveSuggestion(p.arms.right);p=decide(p,'right',{action:'wave',a:suggestion.a,b:suggestion.b});
-  }
-  p=decide(p,'right',{action:'taper'});
-  const taper=currentSlot(p),testSlot=p.slots[taper.index+1];
-  assert.equal((Date.parse(testSlot.date)-Date.parse(taper.date))/86400000,4);
-  assert.equal(testSlot.plan.right.at(-1).kg,99.4);
-  p=applyWorkout(p,workout(p));p=applyWorkout(p,workout(p));
-  assert.equal(p.arms.right.goalDone,true);p=decide(p,'right',{action:'finish-arm'});assert.equal(p.status,'completed');
-});
+const config = (weeks = 12, right = 100, left = 80) => ({ name: 'Подготовка', targetDate: '2027-10-03', weeks,
+  arms: { right: { ...defaultArm(), base: right, baseConfirmed: true }, left: { ...defaultArm(), base: left, baseConfirmed: true } } });
+const at = '2026-10-04T12:00:00.000Z';
+const finish = (p, index = 0, fail = false) => {
+  const slot = p.slots[index], sets = clone(slot.plan);
+  for (const arm of ARMS) sets[arm].forEach(s => Object.assign(s, { status: 'done', actualReps: fail ? Math.max(0, s.reps - 1) : s.reps, completedAt: at }));
+  return { id: crypto.randomUUID(), title: p.name, startedAt: at, endedAt: at, restSec: 0, partial: false,
+    progressionId: p.id, plannedSessionId: slot.id, initialPlan: clone(slot.plan), sets };
+};
+const backup = (program, workouts = [], active = null) => ({ format: 'hvat-backup', version: BACKUP_VERSION,
+  data: { templates: [], manualRecords: [], workouts, progressions: [program], active, settings: { sound: false }, pendingImports: [] } });
 
-test('failed B cannot be compensated by A, extra reps or a warmup; skips do not credit',()=>{
-  let p=program('wave');
-  for(let i=0;i<8;i++)p=applyWorkout(p,workout(p,w=>{if(i===5)w.sets.right.find(s=>s.role==='main').actualReps=0;}));
-  const suggestion=waveSuggestion(p.arms.right);assert.equal(suggestion.a,2);assert.equal(suggestion.b,1);
-  p=decide(p,'right',{action:'wave',a:2,b:1});assert.equal(p.needsExtension.weeks,4);
-  p=program('wave');const w=workout(p,x=>{x.sets.right[0].status='skipped';delete x.sets.right[0].actualReps;});p=applyWorkout(p,w);
-  assert.equal(progress(p).done,0);assert.equal(p.slots[0].status,'partial');
+test('every duration allocates four positive consecutive periods and three sessions per week', () => {
+  for (let weeks = 4; weeks <= 52; weeks++) {
+    const lengths = allocatePeriods(weeks), p = createProgression(config(weeks));
+    assert.equal(lengths.reduce((a, b) => a + b), weeks);
+    assert.ok(lengths.every(n => n >= 1));
+    if (weeks >= 26) lengths.forEach((n, i) => assert.ok(n >= PERIODS[i].min && n <= PERIODS[i].max));
+    assert.deepEqual(p.blocks.map(b => b.key), PERIODS.map(b => b.key));
+    assert.equal(p.slots.length, weeks * 3);
+    assert.equal(p.slots.at(-1).date, p.config.targetDate);
+    assert.equal(new Set(p.slots.map(s => s.date)).size, p.slots.length);
+    for (let w = 1; w <= weeks; w++) assert.equal(p.slots.filter(s => s.week === w).length, 3);
+    for (const s of p.slots) {
+      assert.equal(s.arms.right.baseKg, weeklyBase(100, s.week));
+      assert.equal(s.arms.left.baseKg, weeklyBase(80, s.week));
+      for (const arm of ARMS) {
+        assert.ok(s.plan[arm].every(row => row.reps >= 1 && row.reps <= 999 && PAIRS.some(p => p.i === row.i && p.j === row.j)));
+        const warmups = s.plan[arm].filter(s => s.role === 'warmup'), work = s.plan[arm].filter(s => s.role !== 'warmup');
+        assert.equal(new Set(warmups.map(s => s.kg)).size, warmups.length);
+        assert.ok(warmups.every((s, i) => (i === 0 || s.kg > warmups[i - 1].kg) && s.kg < work[0].kg));
+      }
+    }
+  }
+});
+test('published durations and deterministic largest-remainder ties', () => {
+  assert.deepEqual(allocatePeriods(4), [1, 1, 1, 1]);
+  assert.deepEqual(allocatePeriods(12), [3, 3, 3, 3]);
+  assert.deepEqual(allocatePeriods(26), [6, 6, 6, 8]);
+  assert.deepEqual(allocatePeriods(52), [20, 12, 10, 10]);
+  assert.deepEqual(allocatePeriods(5), [1, 1, 1, 2]);
+  for (const n of [0, 3, 53, 5.5, NaN]) assert.throws(() => allocatePeriods(n));
+});
+test('calendar is date-only across leap days and DST boundaries', () => {
+  for (const target of ['2028-02-29', '2027-03-28', '2027-11-07']) {
+    const rows = generateCalendar(target, 4);
+    assert.equal(rows[0].date, addDays(target, -27));
+    assert.deepEqual(rows.slice(-3).map(s => s.date), [-6, -4, 0].map(n => addDays(target, n)));
+  }
+  for (const date of ['2027-02-29', '2026-13-01', '2026-10-4', 'bad']) assert.throws(() => generateCalendar(date, 4));
+});
+test('four-week waves lower workload and restart for each period', () => {
+  const a = idealLoad('strength', 3, 12, 0, 100), b = idealLoad('strength', 4, 12, 0, 100), c = idealLoad('strength', 5, 12, 0, 100);
+  assert.ok(b.kg < a.kg && b.sets < a.sets && b.deload);
+  assert.equal(c.kg, idealLoad('strength', 1, 12, 0, 100).kg);
+  assert.equal(idealLoad('endurance', 1, 6, 1, 100).restSec, 120);
+  assert.equal(idealLoad('speed', 1, 6, 0, 100).restSec, 240);
+});
+test('peaking increases intensity while reducing volume; taper is the final week', () => {
+  const first = idealLoad('peak', 1, 8, 0, 100), last = idealLoad('peak', 7, 8, 0, 100);
+  assert.ok(last.kg > first.kg && last.sets * last.reps < first.sets * first.reps);
+  assert.deepEqual([0, 1, 2].map(d => idealLoad('peak', 8, 8, d, 100).percent), [85, 40, 100]);
+  assert.ok(idealLoad('peak', 1, 1, 2, 100).control);
+});
+test('load fitting can compensate a lighter weight with more repetitions and remains deterministic', () => {
+  const ideal = { kg: 31.7, baseKg: 100, sets: 4, reps: 10 };
+  const fitted = fitLoad(ideal, 'endurance');
+  assert.ok(fitted.pair.kg < ideal.kg);
+  assert.ok(fitted.reps.reduce((a, b) => a + b) > 40);
+  assert.ok(Math.max(...fitted.reps) - Math.min(...fitted.reps) <= 1);
+  assert.deepEqual(fitLoad(ideal, 'endurance'), fitted);
+  assert.ok(fitted.reps.every(n => n >= 8 && n <= 12));
+  for (const period of ['speed', 'peak']) {
+    const f = fitLoad({ ...ideal, kg: 70, reps: 3 }, period);
+    assert.ok(f.pair.kg <= 70); assert.deepEqual(f.reps, [3, 3, 3, 3]);
+  }
+});
+test('equipment ceiling adds balanced repetitions in all four periods without adding sets', () => {
+  for (const period of PERIODS.map(p => p.key)) {
+    const f = fitLoad({ kg: 125, baseKg: 150, sets: 4, reps: 5 }, period);
+    assert.equal(f.pair.kg, 120.4); assert.deepEqual(f.reps, [6, 5, 5, 5]); assert.equal(f.capped, true);
+  }
+  assert.equal(fitLoad({ kg: 120.4, baseKg: 130, sets: 2, reps: 1 }, 'peak').capped, false);
+  assert.equal(fitLoad({ kg: 5, baseKg: 10, sets: 2, reps: 5 }, 'strength').unavailable, true);
+  assert.ok(createProgression(config(4, 20)).slots[0].arms.right.unavailable);
+});
+test('results, misses, serialization and skips never rewrite the fixed plan', () => {
+  const p = createProgression(config()), frozen = JSON.stringify(p.slots.map(s => ({ date: s.date, plan: s.plan, arms: s.arms })));
+  for (const failed of [false, true]) {
+    const w = finish(p, 0, failed), next = applyWorkout(p, w);
+    assert.equal(next.slots[0].status, failed ? 'modified' : 'completed');
+    assert.equal(JSON.stringify(next.slots.map(s => ({ date: s.date, plan: s.plan, arms: s.arms }))), frozen);
+    assert.deepEqual(applyWorkout(next, w), next);
+  }
+  const skipped = skipSlot(p, p.slots[0].id);
+  assert.equal(skipped.slots[0].status, 'skipped');
+  assert.equal(JSON.stringify(skipped.slots.map(s => ({ date: s.date, plan: s.plan, arms: s.arms }))), frozen);
+  assert.deepEqual(JSON.parse(JSON.stringify(p)).slots, p.slots);
+});
+test('failed control stops only later attempts of that arm and leaves initial plan intact', () => {
+  const p = createProgression(config(4)), slot = p.slots.at(-1), active = { initialPlan: clone(slot.plan), sets: clone(slot.plan) };
+  const tests = active.sets.right.filter(s => s.control);
+  Object.assign(tests[0], { status: 'done', actualReps: 0 });
+  const frozen = JSON.stringify(active.initialPlan);
+  stopControlAttempts(active, 'right');
+  assert.ok(tests.slice(1).every(s => s.status === 'skipped' && s.autoStopped));
+  assert.ok(active.sets.left.every(s => s.status === 'pending'));
+  assert.equal(JSON.stringify(active.initialPlan), frozen);
+});
+test('ceiling control merges repeated attempts and records only actual repetitions, including >10', () => {
+  const p = createProgression(config(52, 120.4, 100)), final = p.slots.at(-1);
+  assert.equal(final.plan.right.filter(s => s.control && s.capped).length, 1);
+  assert.equal(final.arms.right.groups.at(-1).ideal.percent, 100);
+  assert.equal(final.arms.right.groups.at(-1).ideal.kg, final.arms.right.baseKg);
+  const w = finish(p, p.slots.length - 1), record = w.sets.right.find(s => s.control && s.capped);
+  const best = calculateRecords([w], []).best;
+  assert.equal(best.right[record.actualReps].kg, 120.4);
+  assert.ok(best.right[1] === null || best.right[1].kg <= 120.4);
+  record.actualReps = 15;
+  assert.equal(calculateRecords([w], []).best.right[15].kg, 120.4);
+});
+test('statistics include warmups and actual repetitions', () => {
+  const rows = [{ kg: 30, reps: 5, role: 'warmup', status: 'done', actualReps: 4 }, { kg: 70, reps: 5, role: 'main', status: 'pending' }];
+  assert.deepEqual(loadStats(rows, 100), { repetitions: 10, tonnage: 500, sets: 2, intensity: 50 });
+  assert.deepEqual(loadStats(rows, 100, true), { repetitions: 4, tonnage: 120, sets: 1, intensity: 30 });
+});
+test('v3 backup roundtrip preserves snapshots and graph copying remaps all links', () => {
+  const p = createProgression(config()), w = finish(p), applied = applyWorkout(p, w);
+  const data = validateProgressions(validateBackup(backup(applied, [w])));
+  assert.deepEqual(data.progressions[0].slots, applied.slots);
+  const copy = copyProgressionGraph(applied, [w], null);
+  assert.notEqual(copy.program.id, applied.id);
+  assert.equal(copy.workouts[0].progressionId, copy.program.id);
+  assert.equal(copy.program.slots[0].credited, copy.workouts[0].id);
+  assert.equal(copy.workouts[0].sets.right[0].plannedSetId, copy.program.slots[0].plan.right[0].id);
+  validateProgressions({ progressions: [copy.program], workouts: copy.workouts });
+  const damaged = clone(data); damaged.progressions[0].slots[0].date = '2027-01-01';
+  assert.throws(() => validateProgressions(damaged), /занятие/);
+  const badPeriod = clone(data); badPeriod.progressions[0].blocks[0].endDate = '2027-01-01';
+  assert.throws(() => validateProgressions(badPeriod), /периоды/);
+  const invalid = clone(data); invalid.progressions[0].slots[0].arms.right.baseKg = Infinity;
+  assert.throws(() => validateProgressions(invalid), /занятие/);
+  for (const version of [1, 2]) assert.throws(() => validateBackup({ ...backup(applied, [w]), version }), /несовместимы/);
 });

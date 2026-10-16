@@ -54,11 +54,41 @@ test('records require exact repetitions and strict weight improvement', () => {
 test('backup rejects invalid format and damaged arm plans', () => {
   assert.throws(() => validateBackup({}), /формат/);
   const plan = copyPlan(createPlan());
-  const raw = { format: 'hvat-backup', version: 1, data: {
+  const raw = { format: 'hvat-backup', version: 3, data: {
     templates: [{ id: 't', name: 'Тест', restSec: 90, sets: plan }],
     workouts: [], manualRecords: [], active: null, settings: { sound: true },
   } };
   assert.equal(validateBackup(raw).templates.length, 1);
   raw.data.templates[0].sets.left = [];
   assert.throws(() => validateBackup(raw), /шаблон/);
+});
+
+test('manual records apply to exact 1-10 repetitions, preserve legacy 1RM, and recalculate after deletion', () => {
+  const legacy = {id:'legacy',arm:'right',i:pair.i,j:pair.j,kg:pair.kg,recordedAt:at};
+  const manual = [legacy,
+    { ...legacy, id:'r5', reps:5, ...nextPair },
+    { ...legacy, id:'l10', arm:'left', reps:10, ...nextPair },
+  ];
+  const {best} = calculateRecords([],manual);
+  assert.equal(best.right[1].kg,pair.kg);
+  assert.equal(best.right[5].kg,nextPair.kg);
+  assert.equal(best.left[10].kg,nextPair.kg);
+  assert.equal(best.right[10],null);
+  assert.equal(calculateRecords([],manual.filter(r=>r.id!=='r5')).best.right[5],null);
+});
+
+test('backup v3 preserves manual repetitions and rejects invalid values', () => {
+  const record = {id:'record',arm:'right',i:pair.i,j:pair.j,kg:pair.kg,recordedAt:at};
+  for(const version of [3]){
+    const raw = {format:'hvat-backup',version,data:{templates:[],workouts:[],manualRecords:[record],active:null,settings:{sound:true}}};
+    assert.equal(validateBackup(raw).manualRecords[0].reps,1);
+    for(const reps of [1,5,10]){
+      raw.data.manualRecords=[{...record,reps}];
+      assert.equal(validateBackup(raw).manualRecords[0].reps,reps);
+    }
+    for(const reps of [0,11,1.5,'5',null]){
+      raw.data.manualRecords=[{...record,reps}];
+      assert.throws(()=>validateBackup(raw),/ручной рекорд/);
+    }
+  }
 });

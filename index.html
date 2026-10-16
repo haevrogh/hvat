@@ -33,7 +33,7 @@
     <nav class="tabs" aria-label="Разделы калькулятора">
       <button id="tabCalc" class="tab active">Пары → кг</button>
       <button id="tabPick" class="tab">Цель → пары</button>
-      <button id="tabSimple" class="tab">Simple pick</button>
+      <button id="tabSimple" class="tab">Все нагрузки</button>
     </nav>
 
     <div class="row">
@@ -98,7 +98,7 @@
       <div id="trainingMessage" class="training-message hidden" role="status" aria-live="polite"></div>
       <div id="trainingHome">
         <div class="training-heading">
-          <div><p class="eyebrow">ТВОЙ ПЛАН</p><h1>Тренировки</h1><p class="training-lead">Правая рука, затем левая. Выбирай вес по своим пружинам.</p></div>
+          <div><h1>Тренировки</h1></div>
           <button id="createTemplate" class="button button--primary" type="button">Новый шаблон</button>
         </div>
         <div id="resumeCard" class="resume-card hidden"></div>
@@ -114,13 +114,13 @@
           <button id="showMoreHistory" class="button button--quiet hidden" type="button">Показать ещё</button>
         </div>
         <div class="training-panel">
-          <div class="training-panel__heading"><h2>Рекорды</h2><span class="muted">1–10ПМ</span></div>
+          <div class="training-panel__heading"><h2>Рекорды</h2><span class="muted">По числу повторений</span></div>
           <div id="recordsOverview" class="records-overview"></div>
-          <div class="training-panel__actions"><button id="showRecordHistory" class="button button--quiet" type="button">История рекордов</button><button id="addManualRecord" class="button button--quiet" type="button">Внести 1ПМ</button></div>
+          <div class="training-panel__actions"><button id="showRecordHistory" class="button button--quiet" type="button">История рекордов</button><button id="addManualRecord" class="button button--quiet" type="button">Внести ПМ</button></div>
           <div id="recordHistory" class="record-history hidden"></div>
         </div>
         <div class="training-panel training-panel--data">
-          <div><h2>Мои данные</h2><p class="muted">Хранятся на этом устройстве. Экспорт поможет сохранить копию.</p></div>
+          <div><h2>Мои данные</h2></div>
           <div class="training-panel__actions"><button id="exportTraining" class="button button--quiet" type="button">Экспорт</button><button id="importTrainingButton" class="button button--quiet" type="button">Импорт</button><input id="importTraining" type="file" accept="application/json,.json" hidden /></div>
         </div>
       </div>
@@ -129,8 +129,11 @@
         <div class="session-topline"><button id="backToTraining" class="button button--quiet" type="button">← К списку</button><span id="sessionProgress" class="count-pill"></span></div>
         <div id="sessionContext" class="training-panel hidden"></div>
         <div id="sessionHero" class="session-hero"></div>
-        <div id="restPanel" class="rest-panel hidden" role="timer"></div>
-        <div class="session-actions"><button id="completeSet" class="button button--primary button--large" type="button">✓ Подход готов</button><button id="editSessionPlan" class="button button--quiet" type="button">Изменить план</button></div>
+        <div id="restPanel" class="rest-panel hidden">
+          <div><small>Отдых</small><strong data-rest-time role="timer" aria-label="Осталось отдыха">00:00</strong></div>
+          <button class="button" type="button" data-action="expand-rest">Развернуть</button>
+        </div>
+        <div class="session-actions"><button id="completeSet" class="button button--primary button--large" type="button">Подход выполнен</button><button id="editSessionPlan" class="button button--quiet" type="button">Изменить план</button></div>
         <button id="skipSet" class="button button--quiet" type="button">Пропустить подход</button>
         <div class="training-panel"><div class="training-panel__heading"><h2>План занятия</h2><button id="toggleSound" class="button button--quiet" type="button" aria-pressed="true">Звук: вкл</button></div><div id="sessionQueue"></div></div>
         <div class="session-footer"><button id="finishTraining" class="button button--quiet" type="button">Завершить тренировку</button><button id="cancelTraining" class="button button--danger" type="button">Отменить</button></div>
@@ -163,7 +166,7 @@
 
   <dialog id="planDialog" class="training-dialog">
     <form id="planForm" method="dialog">
-      <div class="dialog-heading"><div><p class="eyebrow">ПЛАН ТРЕНИРОВКИ</p><h2 id="planDialogTitle">Новый шаблон</h2></div><button id="closePlanDialog" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
+      <div class="dialog-heading"><h2 id="planDialogTitle">Новый шаблон</h2><button id="closePlanDialog" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
       <label class="field">Название<input id="planName" type="text" maxlength="100" required placeholder="Например, силовая" /></label>
       <label class="field">Отдых между подходами, секунд<input id="planRest" type="number" min="0" max="3600" step="5" value="90" required /></label>
       <div id="planArms"></div>
@@ -180,16 +183,27 @@
 
   <dialog id="manualRecordDialog" class="training-dialog training-dialog--small">
     <form id="manualRecordForm" method="dialog">
-      <div class="dialog-heading"><h2>Внести 1ПМ</h2><button id="closeManualRecord" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
+      <div class="dialog-heading"><h2>Внести ПМ</h2><button id="closeManualRecord" class="icon-button" type="button" aria-label="Закрыть">×</button></div>
       <label class="field">Рука<select id="manualArm"><option value="right">Правая</option><option value="left">Левая</option></select></label>
+      <label class="field">Повторы<select id="manualReps"></select></label>
       <label class="field">Нагрузка и пружины<select id="manualWeight"></select></label>
       <label class="field">Дата<input id="manualDate" type="date" required /></label>
+      <p id="manualRecordError" class="form-error" role="alert"></p>
       <div class="dialog-actions"><button id="cancelManualRecord" class="button button--quiet" type="button">Отмена</button><button class="button button--primary" type="submit">Сохранить</button></div>
     </form>
   </dialog>
 
   <dialog id="progressionDialog" class="training-dialog" aria-label="Настройка прогрессии"></dialog>
-  <dialog id="feedbackDialog" class="training-dialog" aria-label="Итоги тренировки"></dialog>
+  <dialog id="restDialog" class="rest-dialog" aria-labelledby="restTitle">
+    <div class="rest-dialog__header"><h2 id="restTitle">Отдых</h2><button class="button button--quiet" type="button" data-action="collapse-rest" autofocus>Свернуть</button></div>
+    <div class="rest-dialog__body">
+      <div class="rest-dialog__time" data-rest-time role="timer" aria-label="Осталось отдыха">00:00</div>
+      <p id="restNext" class="rest-dialog__next"></p>
+      <div class="rest-dialog__adjust"><button class="button" type="button" data-action="subtract-rest">−30 сек</button><button class="button" type="button" data-action="add-rest">+30 сек</button></div>
+      <p id="restError" class="form-error" role="alert"></p>
+    </div>
+    <button class="button button--primary button--large" type="button" data-action="skip-rest">Пропустить</button>
+  </dialog>
   <script type="module" src="js/init.js"></script>
 
 </body>

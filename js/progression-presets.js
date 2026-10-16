@@ -1,15 +1,17 @@
-export const PRESET_VERSION = 'hvat-progression-1';
-export const METHODS = { wave: 'Волнообразная', double: 'Double progression', ladder: 'Тест + один повтор' };
-export const WAVE = {
-  1: {
-    a: [[79.9,84.9,88.8],[82.5,88.5,90.6],[84.9,90.6,93.7],[88.5,93.7,97]],
-    b: [[67.8,71.5,76.7],[71.2,74.9,79.9],[73.8,76.7,82.5],[76.7,79.9,84.9]],
-    setsA: [[4,4],[5,3],[4,2]], setsB: [[4,9],[4,8],[4,6]], deload: [[69.1,2,3],[66.9,2,5]],
-  },
-  2: {
-    a: [[90.6,93.7,88.8],[93.7,97,90.6],[97,99.4,93.7],[99.4,104,97]],
-    b: [[79.9,84.9,88.5],[82.5,88.5,90.6],[84.9,90.6,93.7],[88.5,93.7,97]],
-    setsA: [[4,3],[4,2],[3,3]], setsB: [[3,8],[3,6],[1,6]], deload: [[76.7,2,3],[74.9,2,5]],
-  },
-};
-export const ROLES = { warmup: 'Разминка', main: 'Основной', backoff: 'Дополнительный', test: 'Тест', max: 'Максимум повторений' };
+export const PRESET_VERSION = 'hvat-four-periods-1';
+export const PERIODS = Object.freeze([
+  { key: 'endurance', label: 'Выносливость', min: 6, max: 20, reps: [8, 12], rest: 180, cue: 'Контролируемое закрытие и возвращение. Набираем объём.' },
+  { key: 'strength', label: 'Сила', min: 6, max: 12, reps: [4, 6], rest: 240, cue: 'Полное закрытие без помощи. Контролируемое возвращение.' },
+  { key: 'speed', label: 'Быстрота', min: 6, max: 10, reps: [2, 5], rest: 240, cue: 'Закрывай быстро, возвращай контролируемо. Скорость приложение не измеряет.' },
+  { key: 'peak', label: 'Пик силы', min: 8, max: 10, reps: [1, 4], rest: 300, cue: 'Полное закрытие. Объём снижается перед целевой датой.' },
+]);
+export const DAYS = Object.freeze(['Тяжёлое', 'Лёгкое', 'Среднее']);
+// Entries: fraction of the weekly calculation base, sets, repetitions.
+export const BASE_LOADS = Object.freeze({
+  endurance: [[.60, 4, 10], [.35, 2, 12], [.45, 3, 10]],
+  strength: [[.70, 5, 5], [.40, 2, 6], [.60, 4, 5]],
+  speed: [[.70, 5, 3], [.40, 3, 3], [.60, 4, 3]],
+});
+export const INTENSITY_WAVE = Object.freeze([.95, 1, 1.05, .9]);
+export const SET_WAVE = Object.freeze([.8, 1, 1.2, .5]);
+export const ROLES = Object.freeze({ warmup: 'Разминка', main: 'Рабочий', test: 'Контроль' });

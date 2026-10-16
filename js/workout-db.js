@@ -1,13 +1,21 @@
-import { applyWorkout, clone, pairKey } from './progression-model.js';
+import { applyWorkout, clone, currentSlot } from './progression-model.js';
 import { copyProgressionGraph, validateProgressions } from './progression-backup.js';
 const DB_NAME = 'hvat-training';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORES = ['templates','workouts','manualRecords','meta','progressions'];
 let dbPromise;
 function openDb() {
   if(!dbPromise) dbPromise=new Promise((resolve,reject)=>{
     const r=indexedDB.open(DB_NAME,DB_VERSION);
-    r.onupgradeneeded=()=>{for(const name of STORES)if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});};
+    r.onupgradeneeded=event=>{
+      for(const name of STORES)if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
+      // The approved v3 replacement starts a new training journal once, in the upgrade transaction.
+      if(event.oldVersion>0){
+        for(const name of STORES.filter(n=>n!=='meta'))r.transaction.objectStore(name).clear();
+        const meta=r.transaction.objectStore('meta'),settings=meta.get('settings');
+        settings.onsuccess=()=>{meta.clear();if(settings.result)meta.put(settings.result);};
+      }
+    };
     r.onsuccess=()=>{r.result.onversionchange=()=>{r.result.close();dbPromise=null;};resolve(r.result);};
     r.onerror=()=>{dbPromise=null;reject(r.error);};
     r.onblocked=()=>{dbPromise=null;reject(new Error('Закрой другие вкладки HVAT и повтори обновление.'));};
@@ -45,6 +53,7 @@ export const put=(store,value)=>atomic(()=>({puts:{[store]:[value]}}));
 export const remove=(store,id)=>atomic(()=>({deletes:{[store]:[id]}}));
 export const getMeta=async(id,fallback=null)=>{const db=await openDb();return new Promise((resolve,reject)=>{const r=db.transaction('meta').objectStore('meta').get(id);r.onsuccess=()=>resolve(r.result?.value??fallback);r.onerror=()=>reject(r.error);});};
 export const setMeta=(id,value)=>id==='active'&&value?atomic(state=>state.active?.id===value.id?{puts:{meta:[{id,value}]}}:{}):put('meta',{id,value});
+export const setRestUntil=(id,restUntil)=>atomic(state=>state.active?.id===id?{puts:{meta:[{id:'active',value:{...state.active,restUntil}}]}}:{});
 export function saveProgression(program,expectedRevision) {
   return atomic(state=>{
     const old=state.progressions.find(p=>p.id===program.id);
@@ -63,7 +72,9 @@ export function startWorkout(active) {
       if(!p||p.status!=='active')throw new Error('Программа не активна.');
       const slot=p.slots.find(s=>s.id===active.plannedSessionId);
       if(!slot || slot.revision!==active.slotRevision)throw new Error('Назначения изменились. Открой занятие заново.');
-      if(Object.values(p.arms).some(s=>s.pending))throw new Error('Сначала подтверди решение о следующем блоке.');
+      if(slot.closed||slot.status==='active'||currentSlot(p)?.id!==slot.id)throw new Error('Это занятие уже закрыто или не является следующим.');
+      if(Object.values(slot.arms).some(a=>a.unavailable))throw new Error('Нет подходящей пары пружин для этого занятия.');
+      if(JSON.stringify(active.initialPlan)!==JSON.stringify(slot.plan)||JSON.stringify(active.sets)!==JSON.stringify(slot.plan))throw new Error('Начальное назначение не совпадает с сохранённым планом.');
       slot.previousStatus=slot.status;slot.status='active';slot.startedAt=active.startedAt;p.revision++;
       puts.progressions=[p];
     }
@@ -104,13 +115,8 @@ export function deleteWorkout(id) {
       if(state.active?.progressionId===w.progressionId)throw new Error('Сначала заверши текущее занятие программы.');
       const p=clone(state.progressions.find(p=>p.id===w.progressionId)),slot=p.slots.find(s=>s.id===w.plannedSessionId);
       slot.attempts=slot.attempts.filter(x=>x!==id);
-      if(slot.credited===id){slot.credited=slot.attempts.find(x=>state.workouts.some(w=>w.id===x&&!w.partial))||null;if(!slot.credited){slot.status='partial';slot.needsResolution=true;}}
-      for(const arm of Object.values(p.arms))for(const [key,e] of Object.entries(arm.evaluations))if(e.workoutId===id)delete arm.evaluations[key];
-      for(const arm of ['right','left'])if(p.arms[arm]){
-        if(slot.applied[arm]?.workoutId===id){delete slot.applied[arm];p.arms[arm].pending=null;}
-        p.arms[arm].goalDone=state.workouts.filter(x=>x.id!==id&&x.progressionId===p.id).some(x=>x.feedback?.[arm]?.technique===true&&x.feedback?.[arm]?.pain===false&&x.sets[arm].some(s=>s.status==='done'&&!['invalid','assisted'].includes(s.quality)&&s.actualReps>=6&&s.kg>=(p.config.arms[arm].method==='wave'?pairKey(p.config.arms[arm].goal).kg:Infinity)));
-      }
-      if(p.completionReason==='goal'&&!Object.values(p.arms).every(s=>s.goalDone))p.completionReason='result-deleted';
+      if(slot.credited===id){slot.credited=slot.attempts.find(x=>state.workouts.some(w=>w.id===x&&!w.partial))||null;if(!slot.credited){slot.status='skipped';slot.closed=true;}}
+      slot.evaluations={};
       p.revision++;p.decisions.push({id:crypto.randomUUID(),type:'deleted-workout',workoutId:id,at:new Date().toISOString()});puts.progressions=[p];
     }
     return {puts,deletes:{workouts:[id]}};
@@ -124,13 +130,15 @@ export async function mergeBackup(data,choices={}) {
       const old=local.progressions.find(x=>x.id===p.id);
       if(!old)continue;
       if(JSON.stringify(old)===JSON.stringify(p)||choices[p.id]!=='copy'){blocked.add(p.id);continue;}
-      const graph=copyProgressionGraph(p,incoming.workouts.filter(w=>w.progressionId===p.id),incoming.active?.progressionId===p.id?incoming.active:null);
+      const graph=copyProgressionGraph(p,incoming.workouts.filter(w=>w.progressionId===p.id),incoming.active?.progressionId===p.id?incoming.active:null,incoming.pendingImports.filter(w=>w.progressionId===p.id));
       incoming.progressions=incoming.progressions.filter(x=>x.id!==p.id).concat(graph.program);
       incoming.workouts=incoming.workouts.filter(x=>x.progressionId!==p.id).concat(graph.workouts);
+      incoming.pendingImports=incoming.pendingImports.filter(x=>x.progressionId!==p.id).concat(graph.pendingImports);
       if(graph.active)incoming.active=graph.active;
     }
     incoming.progressions=incoming.progressions.filter(p=>!blocked.has(p.id));
     incoming.workouts=incoming.workouts.filter(w=>!blocked.has(w.progressionId));
+    incoming.pendingImports=incoming.pendingImports.filter(w=>!blocked.has(w.progressionId));
     if(incoming.active&&blocked.has(incoming.active.progressionId))incoming.active=null;
     if(local.progressions.some(p=>p.status==='active'))for(const p of incoming.progressions)if(p.status==='active')p.status='paused';
     const puts={},counts={};
