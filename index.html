@@ -11,6 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/block.css">
+  <link rel="stylesheet" href="styles/cycle.css">
 </head>
 <body>
   <div class="wrap">
@@ -25,7 +27,8 @@
     <nav class="primary-nav" aria-label="Основные разделы">
       <button id="sectionCalcButton" class="primary-nav__button active" type="button" aria-pressed="true">Калькулятор</button>
       <button id="sectionTrainingButton" class="primary-nav__button" type="button" aria-pressed="false">Тренировки</button>
-      <button id="sectionProgressionButton" class="primary-nav__button" type="button" aria-pressed="false">Прогрессия</button>
+      <button id="sectionBlockButton" class="primary-nav__button" type="button" aria-pressed="false">План блока</button>
+      <button id="sectionCycleButton" class="primary-nav__button" type="button" aria-pressed="false">Цикл 4+1</button>
     </nav>
 
     <section id="sectionCalc" aria-label="Калькулятор">
@@ -145,6 +148,17 @@
       <div id="progressionRoot"></div>
     </section>
 
+    <section id="sectionCycle" class="training-section hidden" aria-label="Бесконечный цикл 4+1">
+      <p id="cycleMessage" class="form-error" role="alert"></p>
+      <div id="cycleRoot"></div>
+    </section>
+
+    <section id="sectionBlock" class="training-section hidden" aria-label="План блока">
+      <p id="blockMessage" class="form-error" role="alert"></p>
+      <div id="blockRoot"></div>
+      <input id="blockImportFile" type="file" accept="application/json,.json" hidden>
+    </section>
+
   </div>
 
   <aside id="comboSelection" class="selection-dock hidden" aria-label="Выбранные пружины" aria-live="polite">
@@ -194,6 +208,8 @@
   </dialog>
 
   <dialog id="progressionDialog" class="training-dialog" aria-label="Настройка прогрессии"></dialog>
+  <dialog id="blockDialog" class="training-dialog block-dialog" aria-label="Настройки плана блока"></dialog>
+  <dialog id="cycleDialog" class="training-dialog" aria-labelledby="cycleDialogTitle"></dialog>
   <dialog id="restDialog" class="rest-dialog" aria-labelledby="restTitle">
     <div class="rest-dialog__header"><h2 id="restTitle">Отдых</h2><button class="button button--quiet" type="button" data-action="collapse-rest" autofocus>Свернуть</button></div>
     <div class="rest-dialog__body">

@@ -9,6 +9,8 @@ import { clone, stopControlAttempts } from './progression-model.js';
 import { validateProgressions } from './progression-backup.js';
 import { ROLES } from './progression-presets.js';
 import { showSection } from './navigation.js';
+import { initBlockUI } from './block-ui.js';
+import { initCycleUI } from './cycle-ui.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -29,6 +31,14 @@ export async function initTrainingUI() {
   try {
     state = await readAll();
   } catch (error) {
+    $('sectionCycleButton').addEventListener('click',()=>{
+      showSection('Cycle');
+      $('cycleRoot').innerHTML='<div class="training-panel"><h1>Цикл недоступен</h1><p>Разрешите хранение данных для этого сайта и перезапустите приложение.</p></div>';
+    });
+    $('sectionBlockButton').addEventListener('click',()=>{
+      showSection('Block');
+      $('blockRoot').innerHTML='<div class="training-panel"><h1>План блока недоступен</h1><p>Разрешите хранение данных для этого сайта и перезапустите приложение.</p></div>';
+    });
     $('sectionTrainingButton').addEventListener('click', () => {
       sectionCalc.classList.add('hidden');
       sectionTraining.classList.remove('hidden');
@@ -56,6 +66,8 @@ export async function initTrainingUI() {
   let historyFilter = 'all';
   let saving = false;
   let progression;
+  let blockPlanner;
+  let endlessCycle;
   const reload = async () => { state = await readAll(); render(); };
   progression = initProgressionUI({getState:()=>state,reload,
     resume(){switchSection(true);},
@@ -68,6 +80,14 @@ export async function initTrainingUI() {
         progressionContext:{name:program.name,week:slot.week,arms:clone(slot.arms)}});
       showSection('Training');
     }});
+  blockPlanner = initBlockUI({getState:()=>state,reload,async start(options){
+    if(state.active){switchSection(true);return;}
+    await startSession(options);showSection('Training');
+  }});
+  endlessCycle = initCycleUI({getState:()=>state,reload,resume(){switchSection(true);},async start(options){
+    if(state.active){switchSection(true);return;}
+    await startSession(options);showSection('Training');
+  }});
 
   function message(text, error = false) {
     const box = $('trainingMessage');
@@ -103,6 +123,8 @@ export async function initTrainingUI() {
 
   function renderHome() {
     progression?.render();
+    blockPlanner?.refresh(state.blockWorkspace,state.workouts);
+    endlessCycle?.refresh();
     const resume = $('resumeCard');
     const waiting=[...state.pendingImports,...state.progressions.filter(p=>p.suspendedWorkout).map(p=>p.suspendedWorkout)];
     resume.classList.toggle('hidden', !state.active&&!waiting.length);
@@ -163,8 +185,10 @@ export async function initTrainingUI() {
     const completed = doneCount(active.sets);
     const total = totalCount(active.sets);
     const current = nextPending(active.sets);
-    $('sessionContext').classList.toggle('hidden',!active.progressionId);
+    $('sessionContext').classList.toggle('hidden',!active.progressionContext&&!active.blockContext&&!active.cycleContext);
     if(active.progressionContext)$('sessionContext').innerHTML=`<strong>${esc(active.progressionContext.name)}</strong><p>Неделя ${active.progressionContext.week}</p>${ARMS.filter(a=>active.progressionContext.arms[a]).map(a=>`<p>${ARM_LABELS[a]} · ${esc(active.progressionContext.arms[a].label)} · ${esc(active.progressionContext.arms[a].phase||'')}</p>`).join('')}<button id="openSessionProgression" class="button" type="button">Открыть прогрессию</button>`;
+    else if(active.blockContext)$('sessionContext').innerHTML=`<strong>${esc(active.blockContext.name)}</strong><p>План: ${esc(active.blockContext.plannedDate)}</p>`;
+    else if(active.cycleContext)$('sessionContext').innerHTML=`<strong>Цикл 4+1 · неделя ${active.cycleWeek} · занятие ${active.cycleDay}</strong><p>${esc(active.cycleContext.label)}</p>`;
     $('sessionProgress').textContent = `${completed} / ${total} подходов`;
     $('toggleSound').textContent = `Звук: ${state.settings.sound ? 'вкл' : 'выкл'}`;
     $('toggleSound').setAttribute('aria-pressed', String(state.settings.sound));
@@ -403,9 +427,10 @@ export async function initTrainingUI() {
   async function startSession({ title, restSec, sets, sourceTemplateId, ...context }) {
     if (state.active) { message('Сначала заверши или отмени текущую тренировку.', true); return; }
     const now = new Date().toISOString();
-    const active = { id: newId(), title, sourceTemplateId, sourceType:context.progressionId?'progression':'standalone',...context,startedAt: now, restSec,
-      initialPlan: context.progressionId?clone(sets):copyPlan(sets), sets: context.progressionId?clone(sets):copyPlan(sets), restUntil: null };
-    if(!context.progressionId)for(const arm of ARMS)active.sets[arm].forEach((s,i)=>{s.plannedSetId=active.initialPlan[arm][i].id;active.initialPlan[arm][i].plannedSetId=s.plannedSetId;});
+    const linked=context.progressionId||context.blockId||context.cycleId;
+    const active = { id: newId(), title, sourceTemplateId, sourceType:context.progressionId?'progression':context.blockId?'block':context.cycleId?'cycle':'standalone',...context,startedAt: now, restSec,
+      initialPlan: linked?clone(sets):copyPlan(sets), sets: linked?clone(sets):copyPlan(sets), restUntil: null };
+    if(!linked)for(const arm of ARMS)active.sets[arm].forEach((s,i)=>{s.plannedSetId=active.initialPlan[arm][i].id;active.initialPlan[arm][i].plannedSetId=s.plannedSetId;});
     await startWorkout(active);
     state=await readAll();
     view = 'session';
@@ -466,6 +491,8 @@ export async function initTrainingUI() {
     const sets = Object.fromEntries(ARMS.map(a=>[a,active.sets[a].filter(s=>s.status!=='pending')]));
     const workout = { id: active.id, title: active.title, sourceTemplateId: active.sourceTemplateId,
       sourceType:active.sourceType,progressionId:active.progressionId||null,plannedSessionId:active.plannedSessionId||null,progressionContext:active.progressionContext,
+      blockId:active.blockId||null,blockSessionId:active.blockSessionId||null,blockContext:active.blockContext,
+      cycleId:active.cycleId||null,cycleWeek:active.cycleWeek,cycleDay:active.cycleDay,cycleRevision:active.cycleRevision,cycleContext:active.cycleContext,
       startedAt: active.startedAt, endedAt: now, restSec: active.restSec, initialPlan: active.initialPlan,
       sets, partial: ARMS.some(a=>active.initialPlan[a].some(s=>!sets[a].some(actual=>actual.plannedSetId===(s.plannedSetId||s.id)&&actual.status==='done'))) };
     await finishWorkout(workout);

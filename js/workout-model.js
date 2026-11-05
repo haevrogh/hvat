@@ -1,4 +1,6 @@
 import { doubleForce, isValidDouble } from './formulas.js';
+import { createWorkspace, validateWorkspace, validBlockDate } from './block-model.js';
+import { validateCycle } from './cycle-model.js';
 
 export const ARMS = Object.freeze(['right', 'left']);
 export const ARM_LABELS = Object.freeze({ right: 'Правая', left: 'Левая' });
@@ -93,8 +95,46 @@ export function calculateRecords(workouts, manualRecords) {
 function validId(value) { return typeof value === 'string' && /^[a-zA-Z0-9:_-]{1,120}$/.test(value); }
 function validDate(value) { return typeof value === 'string' && Number.isFinite(Date.parse(value)); }
 function validRest(value) { return Number.isInteger(value) && value >= 0 && value <= 3600; }
+function validCapturedMaximum(value) { return Number.isFinite(value) && value > 0 && value <= PAIRS.at(-1).kg; }
+function validBlockContext(context) {
+  if (context === undefined || context === null) return true;
+  return typeof context === 'object' && !Array.isArray(context)
+    && (context.name === undefined || typeof context.name === 'string' && context.name.length <= 100)
+    && (context.plannedDate === undefined || validBlockDate(context.plannedDate))
+    && (context.maxima === undefined || context.maxima && typeof context.maxima === 'object'
+      && !Array.isArray(context.maxima) && ARMS.every(arm => context.maxima[arm] == null || validCapturedMaximum(context.maxima[arm])));
+}
+function validBlockLink(value) {
+  return ((value.blockId == null && value.blockSessionId == null)
+    || (validId(value.blockId) && validId(value.blockSessionId))) && validBlockContext(value.blockContext);
+}
+function validCycleLink(value) {
+  const fields = ['cycleId','cycleRevision','cycleWeek','cycleDay','cycleContext'];
+  if (fields.every(field => value[field] === undefined || value[field] === null)) return true;
+  const context = value.cycleContext;
+  return validId(value.cycleId) && Number.isSafeInteger(value.cycleRevision) && value.cycleRevision >= 0
+    && Number.isSafeInteger(value.cycleWeek) && value.cycleWeek >= 1 && [1,2].includes(value.cycleDay)
+    && !value.progressionId && !value.blockId && context && typeof context === 'object' && !Array.isArray(context)
+    && typeof context.label === 'string' && context.label.length <= 100 && typeof context.light === 'boolean'
+    && context.maxima && typeof context.maxima === 'object' && !Array.isArray(context.maxima)
+    && ARMS.every(arm => Number.isFinite(context.maxima[arm]) && context.maxima[arm] > 0);
+}
+function validCycleSet(set) {
+  return (set.cycleId === undefined || validId(set.cycleId))
+    && (set.cycleRevision === undefined || Number.isSafeInteger(set.cycleRevision) && set.cycleRevision >= 0)
+    && (set.cycleWeek === undefined || Number.isSafeInteger(set.cycleWeek) && set.cycleWeek >= 1)
+    && (set.cycleDay === undefined || [1,2].includes(set.cycleDay))
+    && (set.cycleMaxKg === undefined || Number.isFinite(set.cycleMaxKg) && set.cycleMaxKg > 0)
+    && (set.cyclePercent === undefined || Number.isFinite(set.cyclePercent) && set.cyclePercent > 0 && set.cyclePercent <= 3)
+    && (set.cycleRole === undefined || ['warmup','main','backoff'].includes(set.cycleRole))
+    && (set.cycleGroup === undefined || Number.isSafeInteger(set.cycleGroup) && set.cycleGroup >= 0 && set.cycleGroup <= 100);
+}
 function validSet(set, completed = false) {
   return set && validId(set.id) && pairFor(set.i, set.j)
+    && validCycleSet(set)
+    && (set.kg === undefined || Number.isFinite(set.kg) && set.kg > 0)
+    && (set.blockRowId === undefined || validId(set.blockRowId))
+    && (set.blockMaxKg === undefined || validCapturedMaximum(set.blockMaxKg))
     && Number.isInteger(set.reps) && set.reps >= 1 && set.reps <= 999
     && (completed ? ['done','skipped'].includes(set.status) : set.status === 'pending')
     && (!completed || set.status === 'skipped' || (Number.isInteger(set.actualReps) && set.actualReps >= 0
@@ -114,6 +154,7 @@ function validActivePlan(plan) {
 }
 export function validActiveWorkout(active) {
   return active && validId(active.id) && typeof active.title === 'string' && active.title.length<=100
+    && validBlockLink(active) && validCycleLink(active)
     && validDate(active.startedAt) && validRest(active.restSec) && validPlan(active.initialPlan,false,true)
     && validActivePlan(active.sets) && (active.restUntil===null || Number.isFinite(active.restUntil));
 }
@@ -131,6 +172,7 @@ export function validateBackup(raw) {
       && item.name.trim().length > 0 && item.name.length <= 100 && validRest(item.restSec)
       && validPlan(item.sets))) throw new Error('В копии есть повреждённый шаблон.');
   if (!workouts.every((item) => item && validId(item.id) && typeof item.title === 'string'
+      && validBlockLink(item) && validCycleLink(item)
       && item.title.length <= 100 && validDate(item.startedAt)
       && validDate(item.endedAt) && validRest(item.restSec) && validPlan(item.initialPlan,false,true)
       && validPlan(item.sets, true, true)
@@ -144,9 +186,13 @@ export function validateBackup(raw) {
     throw new Error('В копии есть повреждённая активная тренировка.');
   }
   if(raw.data.pendingImports!==undefined&&(!Array.isArray(raw.data.pendingImports)||!raw.data.pendingImports.every(validActiveWorkout)))throw new Error('Повреждено сохранённое импортированное занятие.');
+  const blockWorkspace = raw.data.blockWorkspace === undefined ? createWorkspace() : validateWorkspace(raw.data.blockWorkspace);
+  const endlessCycle = raw.data.endlessCycle == null ? null : validateCycle(raw.data.endlessCycle);
   const cleanSet = (set) => ({ ...set, kg: set.calcVersion && Number.isFinite(set.kg) ? set.kg : pairFor(set.i, set.j).kg });
   const cleanPlan = (plan) => Object.fromEntries(ARMS.map((arm) => [arm, plan[arm].map(cleanSet)]));
   return {
+    blockWorkspace,
+    endlessCycle,
     progressions: raw.data.progressions || [],
     pendingImports: raw.data.pendingImports || [],
     templates: templates.map((item) => ({ ...item, sets: cleanPlan(item.sets) })),

@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
     for (const oldVersion of [1, 2]) {
       const context = await browser.newContext(), page = await context.newPage(), errors = [];
       page.on('pageerror', e => errors.push(e.message));
-      await page.goto('http://127.0.0.1:8765/manifest.json');
+      await page.goto(new URL('manifest.json', process.env.HVAT_URL || 'http://127.0.0.1:8765/').href);
       await page.evaluate(version => new Promise((resolve, reject) => {
         const names = ['templates', 'workouts', 'manualRecords', 'meta', ...(version === 2 ? ['progressions'] : [])];
         const request = indexedDB.open('hvat-training', version);
@@ -21,7 +21,7 @@ const assert = require('node:assert/strict');
           tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error);
         };
       }), oldVersion);
-      await page.goto('http://127.0.0.1:8765/');
+      await page.goto(process.env.HVAT_URL || 'http://127.0.0.1:8765/');
       await page.waitForFunction(() => document.querySelector('#recordsOverview').children.length > 0);
       const result = await page.evaluate(async () => {
         const db = await import('./js/workout-db.js'), m = await import('./js/progression-model.js'), w = await import('./js/workout-model.js');

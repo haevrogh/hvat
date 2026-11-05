@@ -19,7 +19,7 @@ const fs = require('node:fs');
     await page.screenshot({ path: path.join(screenshotDir, name + '.png'), fullPage: name !== 'rest-fullscreen' });
   }
   try {
-    await page.goto('http://127.0.0.1:8765/');
+    await page.goto(process.env.HVAT_URL || 'http://127.0.0.1:8765/');
     await loaded();
     await page.evaluate(async () => {
       const db = await import('./js/workout-db.js'), m = await import('./js/workout-model.js');
@@ -77,13 +77,13 @@ const fs = require('node:fs');
     await rest.locator('[data-action=collapse-rest]').click();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v11')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v18')));
     const recordsBeforeOffline = (await state()).manualRecords;
     await context.setOffline(true);
     await page.reload(); await loaded();
     assert.deepEqual((await state()).manualRecords, recordsBeforeOffline);
     await context.setOffline(false);
     assert.deepEqual(errors, []);
-    console.log('PASS timer fullscreen/keyboard/focus/rapid adjustments/collapse/reload/expiry/skip; exact manual RM/export v3/import/deletion; v11 offline reload');
+    console.log('PASS timer fullscreen/keyboard/focus/rapid adjustments/collapse/reload/expiry/skip; exact manual RM/export v3/import/deletion; v18 offline reload');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

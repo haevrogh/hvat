@@ -1,0 +1,92 @@
+body.cycle-active .wrap { max-width:1160px; }
+#cycleRoot h2 { font-size:22px; }
+#cycleRoot h3 { margin:0; font-size:17px; }
+.cycle-heading .eyebrow { margin:0 0 8px; }
+.cycle-welcome { padding:32px; }
+.cycle-welcome p { max-width:640px; line-height:1.7; }
+.cycle-current { display:flex; justify-content:space-between; align-items:center; gap:24px; }
+.cycle-current h2 { margin:8px 0; }
+.cycle-current p { margin:8px 0 16px; }
+.cycle-state { color:var(--accent-dark); font-size:12px; font-weight:800; }
+.cycle-current-actions { display:grid; gap:8px; min-width:230px; }
+.cycle-current-actions .button { min-height:44px; }
+.cycle-maxima { display:flex; flex-wrap:wrap; gap:16px; font-size:13px; }
+.cycle-note { color:var(--muted); font-size:12px; line-height:1.6; }
+.cycle-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.cycle-panel-heading h2 { margin:16px 0; }
+.cycle-panel-heading > span { font-size:12px; color:var(--muted); }
+.cycle-pager { display:flex; align-items:center; gap:12px; font-size:12px; }
+.cycle-pager .button { min-width:44px; min-height:44px; }
+.cycle-program-heading { margin:16px 0 12px; }
+.cycle-program-heading h2 { margin:0; }
+.cycle-week-navigation { justify-content:flex-end; }
+.cycle-view-switch { display:flex; flex-wrap:wrap; gap:8px; }
+.cycle-view-switch .button { min-height:44px; }
+.cycle-load-filters { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin-top:12px; }
+.cycle-load-controls .cycle-note { margin-bottom:0; }
+.cycle-overview-table { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
+.cycle-overview-table th, .cycle-overview-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--glass-edge); }
+.cycle-overview-table thead th { color:var(--muted); font-size:12px; }
+.cycle-overview-table thead th:nth-child(1) { width:17%; }
+.cycle-overview-table thead th:nth-child(2) { width:18%; }
+.cycle-overview-table thead th:nth-child(3) { width:39%; }
+.cycle-overview-table tbody th .button { min-width:44px; min-height:44px; padding:4px 8px; }
+.cycle-overview-table tbody th small { display:block; margin-top:3px; color:var(--muted); font-size:10px; }
+.cycle-overview-table td:nth-child(2) { white-space:nowrap; }
+.cycle-overview-table .is-light { background:#fff1cb; }
+.cycle-overview-table .is-current th { box-shadow:inset 3px 0 var(--accent); }
+.cycle-overview-table .is-current .button { border-color:var(--accent); }
+.cycle-weeks { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:8px 0 24px; }
+.cycle-week { padding:16px 12px; text-align:left; font:inherit; color:var(--text); border:1px solid var(--glass-edge); background:var(--glass); border-radius:14px; cursor:pointer; min-width:0; }
+.cycle-week small { display:block; font-size:11px; line-height:1.5; margin-bottom:8px; }
+.cycle-week strong { font-size:20px; }
+.cycle-week.is-light { background:#fff1cb; }
+.cycle-week.is-selected { outline:2px solid var(--accent); outline-offset:1px; background:#f6fffc; }
+.cycle-week.is-selected.is-light { background:#fff1cb; }
+.cycle-week:focus-visible { outline:3px solid var(--accent-dark); outline-offset:3px; }
+.cycle-preview-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.cycle-preview-heading p { margin:8px 0 12px; }
+.cycle-days { display:flex; gap:8px; margin:8px 0 16px; }
+.cycle-days .button { flex:1; min-height:44px; }
+.cycle-arm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.cycle-arm .cycle-panel-heading { margin-bottom:12px; }
+.cycle-sets { width:100%; border-collapse:collapse; font-size:12px; }
+.cycle-sets th { text-align:left; font-weight:600; }
+.cycle-sets thead th { font-size:11px; color:var(--muted); padding:8px 0; }
+.cycle-sets td,.cycle-sets tbody th { padding:12px 8px 12px 0; border-top:1px solid rgba(25,92,101,.16); }
+.cycle-sets td:last-child { padding-right:0; white-space:nowrap; text-align:right; }
+.cycle-sets strong { font-size:19px; letter-spacing:-.025em; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cycle-sets small { display:block; margin-top:4px; font-size:11px; color:var(--muted); font-weight:400; }
+.cycle-caption { text-align:left; color:var(--muted); font-size:11px; margin:4px 0 8px; }
+.cycle-rules summary,.cycle-history summary { cursor:pointer; font-weight:800; font-size:13px; min-height:32px; }
+.cycle-rules summary:focus-visible,.cycle-history summary:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+.cycle-rules,.cycle-history { margin-top:16px; }
+.cycle-rules p,.cycle-history p { font-size:13px; line-height:1.7; }
+.cycle-warning { background:#fff1cb; color:var(--text); border-radius:12px; padding:16px; font-size:13px; line-height:1.6; }
+.cycle-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+#cycleDialog p { font-size:13px; line-height:1.7; }
+.cycle-return-preview { background:var(--glass-strong); border:1px solid var(--glass-edge); border-radius:14px; padding:16px; }
+.cycle-return-preview small { display:block; }
+@media (max-width:700px) {
+  .primary-nav__button { min-height:44px; }
+  .cycle-current { display:block; }
+  .cycle-current-actions { margin-top:20px; min-width:0; }
+  .cycle-arm-grid { grid-template-columns:1fr; }
+  .cycle-weeks { grid-template-columns:repeat(5,minmax(96px,1fr)); overflow-x:auto; padding:4px; margin-inline:-4px; }
+  .cycle-week { padding:12px; }
+  .cycle-week strong { font-size:18px; }
+  .cycle-form-grid { grid-template-columns:1fr; gap:0; }
+  .cycle-heading { align-items:start; }
+  .cycle-welcome { padding:20px; }
+  .cycle-overview { padding:12px; }
+  .cycle-overview-table { table-layout:fixed; font-size:12px; }
+  .cycle-overview-table th, .cycle-overview-table td { padding:6px 4px; }
+  .cycle-overview-table thead th { font-size:11px; }
+  .cycle-overview-table tbody th .button { min-width:0; width:100%; }
+  .cycle-load .block-chart-label { font-size:18px; }
+}
+@media (max-width:360px) {
+  .cycle-sets strong { font-size:17px; }
+  .cycle-arm .cycle-panel-heading { gap:8px; }
+  .cycle-days .button { padding-inline:8px; font-size:11px; }
+}

@@ -18,9 +18,26 @@ export function initProgressionUI(bridge) {
     const p = program(); if (p) selected = p.id;
     root.innerHTML = p ? programView(p, state().active, state().progressions, state().workouts)
       : `<div class="training-heading"><h1>Прогрессия</h1></div><section class="training-panel"><h2>Подготовка к выбранной дате</h2><p>Выносливость → сила → быстрота → пик силы.</p><p>От 4 до 52 недель, три тренировки в неделю. Нагрузки рассчитываются отдельно для каждой руки.</p>${button('create', 'Создать программу', '', true)}</section>`;
-    const next = state().progressions.find(x => x.status === 'active'), card = document.getElementById('nextProgression');
-    card.classList.toggle('hidden', !next);
-    if (next) card.innerHTML = `<div><strong>${esc(next.name)}</strong><small>Пик ${displayDate(next.config.targetDate)} · ${currentSlot(next) ? `неделя ${currentSlot(next).week}` : 'период завершён'}</small></div>${button('open', 'Открыть прогрессию', '', true)}`;
+    const active = state().progressions.find(x => x.status === 'active');
+    const saved = active || p;
+    const card = document.getElementById('nextProgression');
+    card.classList.toggle('hidden', !saved);
+    if (active) {
+      const next = currentSlot(active);
+      card.innerHTML = `<div><strong>${esc(active.name)}</strong><small>Пик ${displayDate(active.config.targetDate)} · ${next ? `неделя ${next.week}` : 'период завершён'}</small></div>${button('open', 'Открыть программу', `data-id="${esc(active.id)}"`, true)}`;
+    } else if (saved) {
+      card.innerHTML = `<div><strong>Сохранённые программы</strong><small>${esc(saved.name)}</small></div>${button('open', 'Открыть программы', `data-id="${esc(saved.id)}"`, true)}`;
+    }
+  }
+  function openProgram(id) {
+    selected = id;
+    showSection('Progression');
+    render();
+    const heading = root.querySelector('h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus();
+    }
   }
   function startWizard() {
     wizard = { step: 0, settings: { name: 'Моя подготовка', weeks: 12, targetDate: addDays(localToday(), 83), arms: { right: defaultArm(), left: defaultArm() } } };
@@ -65,7 +82,7 @@ export function initProgressionUI(bridge) {
     const { prog: action, id } = target.dataset;
     if (action === 'close-dialog') { dialog.close(); return; }
     if (action === 'create') { startWizard(); return; }
-    if (action === 'open') { showSection('Progression'); render(); return; }
+    if (action === 'open') { openProgram(id); return; }
     if (action === 'resume') { bridge.resume(); return; }
     if (action === 'weeks-preset') { readStep(false); wizard.settings.weeks = Number(target.dataset.weeks); renderWizard(); return; }
     if (action === 'wizard-back') { readStep(false); wizard.step--; renderWizard(); return; }
@@ -113,7 +130,6 @@ export function initProgressionUI(bridge) {
     try { if (wizard.step === 2) await saveWizard(); else { readStep(); if (wizard.step === 1) wizard.preview = createProgression(wizard.settings); wizard.step++; renderWizard(); } }
     catch (e) { dialog.querySelector('#wizardError').textContent = e.message; } finally { busy = false; }
   });
-  dialog.addEventListener('close', () => { document.getElementById('sectionProgressionButton').focus(); });
-  document.getElementById('sectionProgressionButton').addEventListener('click', () => { showSection('Progression'); render(); });
-  return { render, open(id) { selected = id; showSection('Progression'); render(); } };
+  dialog.addEventListener('close', () => { root.querySelector('[data-prog="create"]')?.focus(); });
+  return { render, open: openProgram };
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hvat-static-v11';
+const CACHE_NAME = 'hvat-static-v18';
 const ASSETS = [
   './', './index.html', './manifest.json', './styles/main.css',
   './js/init.js', './js/ui.js', './js/formulas.js', './js/finders.js',
@@ -6,6 +6,10 @@ const ASSETS = [
   './js/workout-ui.js', './js/workout-db.js', './js/workout-model.js',
   './js/navigation.js', './js/progression-model.js', './js/progression-presets.js',
   './js/progression-ui.js', './js/progression-view.js', './js/progression-backup.js',
+  './styles/block.css', './js/block-ui.js', './js/block-view.js', './js/block-model.js',
+  './js/block-charts.js', './js/block-storage.js', './js/block-format.js',
+  './styles/cycle.css', './js/cycle-model.js', './js/cycle-ui.js', './js/cycle-view.js',
+  './js/cycle-charts-model.js', './js/cycle-charts.js',
   './fonts/manrope-variable.ttf', './fonts/sora-variable.ttf',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png',
   './icons/apple-touch-icon.png',

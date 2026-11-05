@@ -1,5 +1,5 @@
 export function showSection(name) {
-  for(const key of ['Calc','Training','Progression']) {
+  for(const key of ['Calc','Training','Progression','Block','Cycle']) {
     const active=key===name;
     document.getElementById(`section${key}`)?.classList.toggle('hidden',!active);
     const button=document.getElementById(`section${key}Button`);
@@ -7,6 +7,8 @@ export function showSection(name) {
   }
   document.body.classList.toggle('training-active',name!=='Calc');
   document.body.classList.toggle('progression-active',name==='Progression');
+  document.body.classList.toggle('block-active',name==='Block');
+  document.body.classList.toggle('cycle-active',name==='Cycle');
   document.documentElement.classList.remove('calc-no-scroll');
   document.dispatchEvent(new CustomEvent('hvat-section-change',{detail:name}));
 }
