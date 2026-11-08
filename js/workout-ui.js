@@ -3,11 +3,10 @@ import {
   calculateRecords, completedSets, copyPlan, createPlan, makeSet, newId,
   nextPending, pairFor, repeatFromHistory, validateBackup,
 } from './workout-model.js';
-import { finishWorkout, mergeBackup, put, readAll, remove, setMeta, setRestUntil, startWorkout, cancelWorkout, deleteWorkout, restoreImportedWorkout } from './workout-db.js';
+import { finishWorkout, mergeBackup, put, readAll, remove, setMeta, setRestUntil, setDraftReps, startWorkout, cancelWorkout, deleteWorkout, restoreImportedWorkout } from './workout-db.js';
 import { initProgressionUI } from './progression-ui.js';
 import { clone, stopControlAttempts } from './progression-model.js';
 import { validateProgressions } from './progression-backup.js';
-import { ROLES } from './progression-presets.js';
 import { showSection } from './navigation.js';
 import { initBlockUI } from './block-ui.js';
 import { initCycleUI } from './cycle-ui.js';
@@ -17,12 +16,29 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
 const formatDate = (date) => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date));
-const weightLabel = (set) => `${set.kg.toFixed(1)} кг · I ${set.i} / II ${set.j}`;
 const pairValue = (set) => `${set.i}-${set.j}`;
 const pairOptions = (selected) => PAIRS.map((pair) =>
   `<option value="${pair.i}-${pair.j}" ${selected === `${pair.i}-${pair.j}` ? 'selected' : ''}>${pair.kg.toFixed(1)} кг · ${pair.i} / ${pair.j}</option>`).join('');
 const doneCount = (sets) => ARMS.reduce((sum, arm) => sum + sets[arm].filter((set) => set.status === 'done').length, 0);
 const totalCount = (sets) => ARMS.reduce((sum, arm) => sum + sets[arm].length, 0);
+const decimalWeight = value => Number(value).toLocaleString('ru-RU', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const pluralRu = new Intl.PluralRules('ru-RU');
+const repetitionWord = value => ({one: 'повторение', few: 'повторения', many: 'повторений', other: 'повторения'})[pluralRu.select(value)];
+const setWord = value => ({one: 'подход', few: 'подхода', many: 'подходов', other: 'подхода'})[pluralRu.select(value)];
+const restTime = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+const springDescription = set => `Пружина I — положение ${set.i}; пружина II — положение ${set.j}`;
+const springPair = set => `<span class="spring-pair" role="img" aria-label="${springDescription(set)}"><span><small>I</small><strong>${set.i}</strong></span><span class="spring-divider" aria-hidden="true">/</span><span><small>II</small><strong>${set.j}</strong></span></span>`;
+const stateLabels = {current: 'Текущий подход', done: 'Подход выполнен', skipped: 'Подход пропущен', pending: 'Предстоящий подход'};
+function setMarker(status) {
+  const shapes = {
+    current: '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>',
+    done: '<path d="m3 8 3.2 3.2L13 4.5"/>',
+    skipped: '<path d="M3 8h10"/>',
+    pending: '<circle cx="8" cy="8" r="3.25"/>',
+  };
+  return `<svg viewBox="0 0 16 16" aria-hidden="true">${shapes[status]}</svg>`;
+}
+const clockIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.5V8l2 1.5"/></svg>';
 
 export async function initTrainingUI() {
   const sectionCalc = $('sectionCalc');
@@ -60,11 +76,16 @@ export async function initTrainingUI() {
   let recordHistoryOpen = false;
   let audioContext = null;
   let lastSignal = '';
+  let observedRestUntil = null;
   let restCollapsed = false;
   let restSave = Promise.resolve();
+  let sessionFieldSave = Promise.resolve();
+  let sessionOpenedFor = null;
+  let editedSetId = null;
   let toastTimeout;
   let historyFilter = 'all';
   let saving = false;
+  let finishPromptedFor = null;
   let progression;
   let blockPlanner;
   let endlessCycle;
@@ -109,6 +130,7 @@ export async function initTrainingUI() {
     $('sectionTrainingButton').setAttribute('aria-pressed', String(training));
     if (training) {
       view = state.active ? 'session' : 'home';
+      finishPromptedFor = null;
       render();
     }
   }
@@ -116,9 +138,11 @@ export async function initTrainingUI() {
   function render() {
     $('trainingHome').classList.toggle('hidden', view !== 'home');
     $('trainingSession').classList.toggle('hidden', view !== 'session' || !state.active);
+    syncSessionShell();
     renderHome();
     if (state.active) renderSession();
     renderRest();
+    promptFinishSession();
   }
 
   function renderHome() {
@@ -179,38 +203,102 @@ export async function initTrainingUI() {
     $('recordHistory').innerHTML = timeline + manual;
   }
 
+  function syncSessionShell() {
+    const visible = !!state.active && view === 'session' && !sectionTraining.classList.contains('hidden');
+    const entering = visible && !document.body.classList.contains('workout-active');
+    document.body.classList.toggle('workout-active', visible);
+    if (visible && sessionOpenedFor !== state.active.id) {
+      sessionOpenedFor = state.active.id;
+      $('sessionPlan').open = true;
+    }
+    if (entering) window.scrollTo({top: 0, behavior: 'instant'});
+    if (!visible) {
+      for (const id of ['sessionActionsDialog', 'sessionSetDialog', 'finishSessionDialog']) {
+        if ($(id).open) $(id).close();
+      }
+    }
+  }
+
   function renderSession() {
+    syncSessionShell();
     const active = state.active;
     if (!active) return;
-    const completed = doneCount(active.sets);
-    const total = totalCount(active.sets);
+    const list = ARMS.flatMap(arm => active.sets[arm]);
+    const total = list.length;
     const current = nextPending(active.sets);
-    $('sessionContext').classList.toggle('hidden',!active.progressionContext&&!active.blockContext&&!active.cycleContext);
-    if(active.progressionContext)$('sessionContext').innerHTML=`<strong>${esc(active.progressionContext.name)}</strong><p>Неделя ${active.progressionContext.week}</p>${ARMS.filter(a=>active.progressionContext.arms[a]).map(a=>`<p>${ARM_LABELS[a]} · ${esc(active.progressionContext.arms[a].label)} · ${esc(active.progressionContext.arms[a].phase||'')}</p>`).join('')}<button id="openSessionProgression" class="button" type="button">Открыть прогрессию</button>`;
-    else if(active.blockContext)$('sessionContext').innerHTML=`<strong>${esc(active.blockContext.name)}</strong><p>План: ${esc(active.blockContext.plannedDate)}</p>`;
-    else if(active.cycleContext)$('sessionContext').innerHTML=`<strong>Цикл 4+1 · неделя ${active.cycleWeek} · занятие ${active.cycleDay}</strong><p>${esc(active.cycleContext.label)}</p>`;
-    $('sessionProgress').textContent = `${completed} / ${total} подходов`;
+    const position = current ? list.findIndex(set => set.id === current.set.id) : total;
+    const processed = list.filter(set => set.status !== 'pending').length;
+    if (current) finishPromptedFor = null;
+    $('sessionTitle').textContent = active.cycleId ? `Неделя ${active.cycleWeek} · ${active.cycleDay === 1 ? 'Сила' : 'Объём'}`
+      : active.progressionContext ? `Неделя ${active.progressionContext.week}`
+      : active.blockContext?.name || active.title;
+    $('sessionTitle').title = active.title;
+    $('backToTraining').textContent = active.cycleId ? '‹ К циклу' : active.blockId ? '‹ К плану' : active.progressionId ? '‹ К программе' : '‹ К списку';
+    $('sessionContext').classList.remove('hidden');
+    $('sessionContext').innerHTML = `<strong>${esc(active.title)}</strong>`;
+    if (active.progressionContext) $('sessionContext').innerHTML += `<p>Неделя ${active.progressionContext.week}</p><button id="openSessionProgression" class="button" type="button">Открыть прогрессию</button>`;
+    else if (active.blockContext) $('sessionContext').innerHTML += `<p>План: ${esc(active.blockContext.plannedDate)}</p>`;
+    else if (active.cycleContext) $('sessionContext').innerHTML += `<p>${esc(active.cycleContext.label)}</p>`;
+    $('sessionProgress').textContent = current ? `Подход ${position + 1} из ${total}` : `Пройдено ${total} из ${total}`;
+    $('sessionProgressBar').max = total || 1;
+    $('sessionProgressBar').value = processed;
+    $('sessionProgressBar').setAttribute('aria-valuetext', `Пройдено ${processed} из ${total}; выполнено ${doneCount(active.sets)}`);
+    $('sessionPlanCount').textContent = `${total} ${setWord(total)}`;
     $('toggleSound').textContent = `Звук: ${state.settings.sound ? 'вкл' : 'выкл'}`;
     $('toggleSound').setAttribute('aria-pressed', String(state.settings.sound));
     if (current) {
       const pair = pairFor(current.set.i, current.set.j);
-      $('sessionHero').innerHTML = `<div class="session-hero__top"><p class="eyebrow">${ROLES[current.set.role]||'ПОДХОД'} · ${completed + 1} ИЗ ${total}</p><span>${ARM_LABELS[current.arm]}</span></div>
-        <h1>${ARM_LABELS[current.arm]} рука</h1><div class="session-hero__weight">${pair.kg.toFixed(1)}<span>кг</span></div>
-        <div class="session-hero__springs">Пружина I — ${pair.i} · Пружина II — ${pair.j}</div>
-        <div class="session-fields"><label>Вес и позиции<select id="sessionWeight" aria-label="Вес и позиции пружин">${pairOptions(pairValue(current.set))}</select></label>
-          <label>План<input id="sessionPlannedReps" type="number" min="1" max="999" step="1" value="${current.set.reps}" aria-label="Плановые повторы" /></label>
-          <label>Факт<input id="sessionActualReps" type="number" min="0" max="999" step="1" value="${current.set.draftReps??current.set.reps}" aria-label="Фактические повторы" /></label></div>
-          ${current.set.capped?'<p>Предел веса: добавлены повторения. Результат учитывается на фактически выполненное число повторений.</p>':''}`;
-    } else {
-      $('sessionHero').innerHTML = '<h1>Подходы закончились</h1>';
-    }
-    $('completeSet').disabled = saving || !current || !!(active.restUntil && active.restUntil > Date.now());
-    $('skipSet').disabled = !current;
-    $('finishTraining').disabled = saving || !ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending'));
-    $('sessionQueue').innerHTML = ARMS.filter(arm=>active.sets[arm].length).map((arm) => `<div class="session-queue-arm"><h3>${ARM_LABELS[arm]} рука</h3>
-      ${active.sets[arm].map((set) => `<div class="session-queue-row ${set.status === 'done' ? 'done' : current?.set.id === set.id ? 'current' : ''}"><span>${set.status === 'done' ? '✓' : set.status==='skipped'?'—':'○'} ${weightLabel(set)}<small>${ROLES[set.role]||''}</small></span><span>${set.status==='skipped'?'Пропущен':`${set.status === 'done' ? set.actualReps : set.reps} повт.`}</span></div>`).join('')}</div>`).join('')
-      + (ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending')) ? '<button id="undoSet" class="button button--quiet" type="button">Отменить последний подход / пропуск</button>' : '');
+      $('sessionHero').innerHTML = `<div class="session-hero__current"><h1>${ARM_LABELS[current.arm]} рука</h1>
+        <div class="session-hero__weight"><span class="session-weight-number">${decimalWeight(pair.kg)}</span><span class="session-weight-unit">кг</span></div>
+        <p class="session-target">По плану — ${current.set.reps} ${repetitionWord(current.set.reps)}</p>
+        <div class="session-springs session-hero__springs"><span class="session-springs-label">Пружины</span>${springPair(pair)}</div>
+        <div class="session-entry"><label class="session-entry-label" for="sessionActualReps">Выполнено повторений</label>
+        <div class="session-stepper"><button id="decreaseSessionReps" type="button" aria-label="Уменьшить число повторений на один">−</button><input id="sessionActualReps" type="number" min="0" max="999" step="1" inputmode="numeric" autocomplete="off" value="${esc(current.set.draftReps ?? current.set.reps)}" aria-label="Фактические повторы" /><button id="increaseSessionReps" type="button" aria-label="Увеличить число повторений на один">+</button></div></div>
+        ${current.set.capped ? '<p class="session-equipment-note">Предел веса: добавлены повторения. Результат учитывается на фактически выполненное число повторений.</p>' : ''}</div>`;
+    } else $('sessionHero').innerHTML = '<h1>Подходы закончились</h1><p class="session-target">Можно проверить план и завершить тренировку.</p>';
+    $('completeSet').textContent = current ? 'Подход выполнен' : 'Завершить тренировку';
+    $('completeSet').disabled = saving || !!(active.restUntil && active.restUntil > Date.now());
+    $('openSessionActions').disabled = saving;
+    $('backToTraining').disabled = saving;
+    $('skipSet').disabled = saving || !current;
+    $('editCurrentSet').disabled = saving || !current;
+    $('undoSet').disabled = saving || !list.some(set => set.status !== 'pending' && !set.autoStopped);
+    $('finishTraining').disabled = saving || !processed;
+    $('sessionQueue').innerHTML = ARMS.filter(arm => active.sets[arm].length).map(arm => `<section class="session-plan-arm"><h3>${ARM_LABELS[arm]} рука</h3><ol class="session-plan-list">${active.sets[arm].map(set => {
+      const status = current?.set.id === set.id ? 'current' : set.status;
+      const differs = status === 'done' && set.actualReps !== set.reps;
+      const note = status === 'current' ? 'Сейчас' : differs ? `Факт ${set.actualReps}` : '';
+      const rest = active.restOverride ?? set.restSec ?? active.restSec;
+      const index = list.indexOf(set) + 1;
+      const actual = status === 'done' ? ` Выполнено ${set.actualReps} повторений, запланировано ${set.reps}.` : '';
+      return `<li class="session-plan-row${status === 'current' ? ' is-current' : ''}" data-state="${status}"${status === 'current' ? ' aria-current="step"' : ''}><span class="session-set-state" aria-hidden="true">${setMarker(status)}</span><div class="session-plan-values"><span class="session-sr-only">Подход ${index}. ${stateLabels[status]}.${actual} </span><p class="session-plan-load">${decimalWeight(set.kg)} кг × ${set.reps}</p><p class="session-plan-springs"><span class="session-sr-only">${springDescription(set)}.</span><span aria-hidden="true">I <strong>${set.i}</strong></span><span aria-hidden="true">/</span><span aria-hidden="true">II <strong>${set.j}</strong></span></p></div><div class="session-plan-side"><span class="session-plan-rest" aria-label="Отдых после подхода: ${rest} секунд">${clockIcon}<span aria-hidden="true">${restTime(rest)}</span></span>${note ? `<span class="session-plan-note">${note}</span>` : ''}</div></li>`;
+    }).join('')}</ol></section>`).join('');
+    updateSessionStepper();
     renderRest();
+  }
+
+  function isPartialSession(active) {
+    return ARMS.some(arm => active.initialPlan[arm].some(planned =>
+      !active.sets[arm].some(actual => actual.plannedSetId === (planned.plannedSetId || planned.id) && actual.status === 'done')));
+  }
+
+  function promptFinishSession() {
+    const active = state.active;
+    if (!active || saving || view !== 'session' || sectionTraining.classList.contains('hidden')
+      || nextPending(active.sets) || finishPromptedFor === active.id) return;
+    if (!ARMS.some(arm => active.sets[arm].some(set => set.status !== 'pending'))) return;
+    finishPromptedFor = active.id;
+    $('finishSessionSummary').textContent = isPartialSession(active)
+      ? `Выполнено ${doneCount(active.sets)} из ${totalCount(active.sets)} подходов. Тренировка будет сохранена частично. Завершить тренировку?`
+      : 'Все подходы выполнены. Завершить и сохранить тренировку?';
+    $('finishSessionError').textContent = '';
+    if (!$('finishSessionDialog').open) $('finishSessionDialog').showModal();
+  }
+
+  function returnToSession() {
+    if (saving) return;
+    $('finishSessionDialog').close();
+    $('sessionHero').focus({ preventScroll: true });
   }
 
   function ensureAudio() {
@@ -239,28 +327,36 @@ export async function initTrainingUI() {
         oscillator.start();
         oscillator.stop(audioContext.currentTime + (second === 0 ? 0.31 : 0.13));
       }
-      navigator.vibrate?.(second === 0 ? [160, 70, 160] : 55);
-    } catch { /* Sound and vibration are best effort. */ }
+    } catch { /* Sound is optional on this device. */ }
+    try {
+      if (second <= 3) navigator.vibrate?.(second === 0 ? 240 : 55);
+    } catch { /* Vibration is optional on this device. */ }
   }
 
-  function renderRest() {
+  function renderRest({ silent = false } = {}) {
     const panel = $('restPanel');
     const dialog = $('restDialog');
     const active = state.active;
     if (!active || !active.restUntil) {
+      observedRestUntil = null;
       panel.classList.add('hidden');
+      $('restNext').textContent = '';
+      $('restSprings').textContent = '';
       if (dialog.open) dialog.close();
       return;
     }
     const remaining = Math.max(0, Math.ceil((active.restUntil - Date.now()) / 1000));
-    if (remaining <= 5 && remaining >= 0) signal(remaining);
+    const observed = observedRestUntil === active.restUntil;
+    if (remaining > 0) observedRestUntil = active.restUntil;
+    // An expired timer restored on launch must not produce a late "go" signal.
+    if (!silent && remaining <= 5 && (remaining > 0 || observed)) signal(remaining);
     if (remaining === 0) {
       active.restUntil = null;
       persistRest().catch(restError);
       $('completeSet').disabled = saving || !nextPending(active.sets);
       const wasOpen = dialog.open;
       renderRest();
-      if (wasOpen) $('sessionActualReps')?.focus();
+      if (wasOpen && !document.hidden) $('completeSet').focus({ preventScroll: true });
       return;
     }
     const visible = view === 'session' && !sectionTraining.classList.contains('hidden');
@@ -273,6 +369,9 @@ export async function initTrainingUI() {
     });
     const next = nextPending(active.sets);
     $('restNext').textContent = next ? `${ARM_LABELS[next.arm]} рука · ${next.set.kg.toFixed(1)} кг × ${next.set.reps}` : '';
+    $('restSprings').innerHTML = next ? `<span class="session-springs-label">Пружины</span>${springPair(next.set)}` : '';
+    if (next) $('restSprings').setAttribute('aria-label', springDescription(next.set));
+    else $('restSprings').removeAttribute('aria-label');
     if (visible && !restCollapsed && !dialog.open) dialog.showModal();
     else if ((!visible || restCollapsed) && dialog.open) dialog.close();
   }
@@ -302,14 +401,14 @@ export async function initTrainingUI() {
     if (!['skip-rest', 'add-rest', 'subtract-rest'].includes(action)) return;
     const wasOpen = $('restDialog').open;
     const now = Date.now();
-    if (state.active.restUntil <= now) { renderRest(); return; }
+    if (state.active.restUntil <= now) { renderRest({ silent: true }); return; }
     state.active.restUntil = action === 'skip-rest' ? null : Math.max(now, state.active.restUntil + (action === 'add-rest' ? 30000 : -30000));
     if (state.active.restUntil === now) state.active.restUntil = null;
     lastSignal = '';
     $('restError').textContent = '';
     renderRest();
     $('completeSet').disabled = saving || !nextPending(state.active.sets) || !!state.active.restUntil;
-    if (!state.active.restUntil && wasOpen) $('sessionActualReps')?.focus();
+    if (!state.active.restUntil && wasOpen) $('completeSet').focus({ preventScroll: true });
     await persistRest();
   }
 
@@ -442,13 +541,16 @@ export async function initTrainingUI() {
     const active = state.active;
     if (!active || saving || (active.restUntil && active.restUntil > Date.now())) return;
     const current = nextPending(active.sets);
-    if (!current) return;
+    if (!current) { finishPromptedFor = null; promptFinishSession(); return; }
     const actualReps = Number($('sessionActualReps').value);
     if ($('sessionActualReps').value==='' || !Number.isInteger(actualReps) || actualReps < 0 || actualReps > 999) {
       message('Укажи фактические повторы от 0 до 999.', true); return;
     }
+    const previous = clone(active);
     saving = true;
+    renderSession();
     try {
+    await sessionFieldSave.catch(() => {});
     ensureAudio();
     current.set.status = 'done';
     current.set.actualReps = actualReps;
@@ -462,15 +564,47 @@ export async function initTrainingUI() {
     lastSignal = '';
     await restSave.catch(() => {});
     await setMeta('active', active);
+    } catch (error) {
+      state.active = previous;
+      message('Не удалось сохранить подход. Попробуй ещё раз.', true);
+      throw error;
     } finally { saving = false; renderSession(); }
+    promptFinishSession();
+  }
+
+  async function skipSet() {
+    const active = state.active;
+    const current = active && nextPending(active.sets);
+    if (!current || saving) return;
+    const previous = clone(active);
+    saving = true;
+    renderSession();
+    try {
+      await sessionFieldSave.catch(() => {});
+      current.set.status = 'skipped';
+      current.set.completedAt = new Date().toISOString();
+      active.restUntil = null;
+      await restSave.catch(() => {});
+      await setMeta('active', active);
+    } catch (error) {
+      state.active = previous;
+      message('Не удалось сохранить пропуск. Попробуй ещё раз.', true);
+      throw error;
+    } finally { saving = false; renderSession(); }
+    promptFinishSession();
   }
 
   async function undoSet() {
     const active = state.active;
-    if (!active) return;
+    if (!active || saving) return;
     const list = [...active.sets.right, ...active.sets.left].filter((set) => set.status !== 'pending' && !set.autoStopped);
     const last = list.at(-1);
     if (!last) return;
+    const previous = clone(active);
+    saving = true;
+    renderSession();
+    try {
+    await sessionFieldSave.catch(() => {});
     const arm=ARMS.find(a=>active.sets[a].includes(last));
     active.sets[arm].forEach(s=>{if(s.autoStopped){s.status='pending';delete s.autoStopped;}});
     last.status = 'pending';
@@ -479,13 +613,23 @@ export async function initTrainingUI() {
     active.restUntil = null;
     await restSave.catch(() => {});
     await setMeta('active', active);
-    renderSession();
+    } catch (error) {
+      state.active = previous;
+      message('Не удалось отменить подход. Попробуй ещё раз.', true);
+      throw error;
+    } finally { saving = false; renderSession(); }
   }
 
   async function finishSession() {
     const active = state.active;
     if (!active || !ARMS.some(a=>active.sets[a].some(s=>s.status!=='pending')) || saving) return;
     saving=true;
+    const dialog = $('finishSessionDialog');
+    $('confirmFinishSession').disabled = true;
+    $('returnToSession').disabled = true;
+    $('finishTraining').disabled = true;
+    $('finishSessionError').textContent = '';
+    dialog.setAttribute('aria-busy', 'true');
     try {
     const now = new Date().toISOString();
     const sets = Object.fromEntries(ARMS.map(a=>[a,active.sets[a].filter(s=>s.status!=='pending')]));
@@ -494,9 +638,12 @@ export async function initTrainingUI() {
       blockId:active.blockId||null,blockSessionId:active.blockSessionId||null,blockContext:active.blockContext,
       cycleId:active.cycleId||null,cycleWeek:active.cycleWeek,cycleDay:active.cycleDay,cycleRevision:active.cycleRevision,cycleContext:active.cycleContext,
       startedAt: active.startedAt, endedAt: now, restSec: active.restSec, initialPlan: active.initialPlan,
-      sets, partial: ARMS.some(a=>active.initialPlan[a].some(s=>!sets[a].some(actual=>actual.plannedSetId===(s.plannedSetId||s.id)&&actual.status==='done'))) };
+      sets, partial: isPartialSession(active) };
+    await sessionFieldSave.catch(() => {});
+    await restSave.catch(() => {});
     await finishWorkout(workout);
     state=await readAll();
+    if (dialog.open) dialog.close();
     view = 'home';
     render();
     message(workout.partial ? 'Частичная тренировка сохранена.' : 'Тренировка сохранена.');
@@ -508,7 +655,17 @@ export async function initTrainingUI() {
       $('updateTemplateSummary').textContent = `«${template.name}»\nБыло — правая: ${describe(template.sets.right)}\nСтанет — правая: ${describe(sets.right, true)}\n\nБыло — левая: ${describe(template.sets.left)}\nСтанет — левая: ${describe(sets.left, true)}\n\nОтдых: ${template.restSec} → ${workout.restSec} с`;
       $('updateTemplateDialog').showModal();
     }
-    } finally {saving=false;if(state.active)renderSession();}
+    } catch (error) {
+      if (dialog.open) $('finishSessionError').textContent = 'Не удалось сохранить тренировку. Попробуй ещё раз.';
+      else message('Не удалось сохранить тренировку. Попробуй ещё раз.', true);
+      console.error(error);
+    } finally {
+      saving = false;
+      $('confirmFinishSession').disabled = false;
+      $('returnToSession').disabled = false;
+      dialog.removeAttribute('aria-busy');
+      if (state.active) renderSession();
+    }
   }
 
   async function replaceTemplate() {
@@ -530,7 +687,7 @@ export async function initTrainingUI() {
     const { action, id } = button.dataset;
     if(action==='open-progression'){progression.open(id);return;}
     if(action==='restore-import'){await restoreImportedWorkout(id);state=await readAll();view='session';render();return;}
-    if (action === 'resume') { view = 'session'; render(); return; }
+    if (action === 'resume') { view = 'session'; finishPromptedFor = null; render(); return; }
     const template = state.templates.find((item) => item.id === id);
     const workout = state.workouts.find((item) => item.id === id);
     if (action === 'start-template' && template) await startSession({ title: template.name, restSec: template.restSec, sets: template.sets, sourceTemplateId: template.id });
@@ -547,31 +704,108 @@ export async function initTrainingUI() {
     }
   }
 
+  function actualRepsValue() {
+    const input = $('sessionActualReps');
+    const value = input?.value;
+    const number = Number(value);
+    return value !== undefined && value !== '' && Number.isInteger(number) && number >= 0 && number <= 999 ? number : null;
+  }
+
+  function updateSessionStepper() {
+    const current = state.active && nextPending(state.active.sets);
+    const value = actualRepsValue();
+    if ($('decreaseSessionReps')) $('decreaseSessionReps').disabled = saving || !current || value === 0;
+    if ($('increaseSessionReps')) $('increaseSessionReps').disabled = saving || !current || value === 999;
+    if ($('sessionActualReps')) $('sessionActualReps').disabled = saving;
+  }
+
   async function sessionFieldChanged(event) {
     const current = state.active && nextPending(state.active.sets);
-    if (!current) return;
-    const previousPlanned = current.set.reps;
-    const previousActual = Number($('sessionActualReps')?.value);
-    let nextActual = previousActual;
-    if (event.target.id === 'sessionWeight') {
-      const [i, j] = event.target.value.split('-').map(Number);
-      const pair = pairFor(i, j);
-      Object.assign(current.set, { i: pair.i, j: pair.j, kg: pair.kg });
-    } else if (event.target.id === 'sessionPlannedReps') {
-      const reps = Number(event.target.value);
-      if (!Number.isInteger(reps) || reps < 1 || reps > 999) { message('Плановые повторы: от 1 до 999.', true); renderSession(); return; }
-      current.set.reps = reps;
-      if (previousActual === previousPlanned) nextActual = reps;
-    } else if(event.target.id==='sessionActualReps') {
-      if(event.target.value==='')delete current.set.draftReps;
-      else current.set.draftReps=Number(event.target.value);
-      await setMeta('active',state.active);return;
-    } else return;
-    await setMeta('active', state.active);
-    renderSession();
-    if (Number.isInteger(nextActual) && nextActual >= 1 && nextActual <= 999) {
-      $('sessionActualReps').value = nextActual;
+    if (!current || saving || event.target.id !== 'sessionActualReps') return;
+    const value = actualRepsValue();
+    if (value === null) delete current.set.draftReps;
+    else current.set.draftReps = value;
+    updateSessionStepper();
+    const id = state.active.id;
+    const setId = current.set.id;
+    sessionFieldSave = sessionFieldSave.catch(() => {}).then(() => setDraftReps(id, setId, value));
+    await sessionFieldSave;
+  }
+
+  function stepSessionReps(delta) {
+    if (saving || !$('sessionActualReps')) return;
+    $('sessionActualReps').value = Math.min(999, Math.max(0, (actualRepsValue() ?? 0) + delta));
+    $('sessionActualReps').dispatchEvent(new Event('input', {bubbles: true}));
+  }
+
+  function closeSessionActions() {
+    if ($('sessionActionsDialog').open) $('sessionActionsDialog').close();
+  }
+
+  function openCurrentSet() {
+    const active = state.active;
+    const current = active && nextPending(active.sets);
+    if (!current || saving) return;
+    closeSessionActions();
+    editedSetId = `${active.id}:${current.set.id}`;
+    $('sessionWeight').innerHTML = pairOptions(pairValue(current.set));
+    $('sessionPlannedReps').value = current.set.reps;
+    $('sessionSetError').textContent = '';
+    $('sessionSetDialog').showModal();
+  }
+
+  async function saveCurrentSet(event) {
+    event.preventDefault();
+    const active = state.active;
+    const current = active && nextPending(active.sets);
+    if (!current || saving) return;
+    if (editedSetId !== `${active.id}:${current.set.id}`) {
+      $('sessionSetError').textContent = 'Текущий подход изменился. Открой его заново.';
+      return;
     }
+    const [i, j] = $('sessionWeight').value.split('-').map(Number);
+    const pair = pairFor(i, j);
+    const reps = Number($('sessionPlannedReps').value);
+    if (!pair || !Number.isInteger(reps) || reps < 1 || reps > 999) {
+      $('sessionSetError').textContent = 'Укажи вес и целое число повторений от 1 до 999.';
+      return;
+    }
+    const previous = clone(active);
+    saving = true;
+    $('saveCurrentSet').disabled = true;
+    $('closeSessionSet').disabled = true;
+    $('sessionSetError').textContent = '';
+    try {
+      await sessionFieldSave.catch(() => {});
+      const actual = current.set.draftReps;
+      const nextActual = actual === undefined || actual === current.set.reps ? reps : actual;
+      Object.assign(current.set, pair, {reps, draftReps: nextActual});
+      await restSave.catch(() => {});
+      await setMeta('active', active);
+      $('sessionSetDialog').close();
+      $('sessionHero').focus({preventScroll: true});
+    } catch (error) {
+      state.active = previous;
+      $('sessionSetError').textContent = 'Не удалось сохранить изменения. Попробуй ещё раз.';
+      console.error(error);
+    } finally {
+      saving = false;
+      $('saveCurrentSet').disabled = false;
+      $('closeSessionSet').disabled = false;
+      renderSession();
+    }
+  }
+
+  function leaveSession() {
+    if (saving) return;
+    const active = state.active;
+    view = 'home';
+    render();
+    if (active?.cycleId) { showSection('Cycle'); endlessCycle.refresh(); }
+    else if (active?.blockId) { showSection('Block'); blockPlanner.refresh(state.blockWorkspace, state.workouts); }
+    else if (active?.progressionId) progression.open(active.progressionId);
+    else showSection('Training');
+    window.scrollTo({top: 0, behavior: 'instant'});
   }
 
   async function exportData() {
@@ -620,19 +854,77 @@ export async function initTrainingUI() {
       : !event.shiftKey && document.activeElement === buttons.at(-1) ? buttons[0] : null;
     if (target) { event.preventDefault(); target.focus(); }
   });
-  document.addEventListener('hvat-section-change', renderRest);
-  $('backToTraining').addEventListener('click', () => { view = 'home'; render(); });
+  document.addEventListener('hvat-section-change', () => { syncSessionShell(); renderRest(); });
+  $('backToTraining').addEventListener('click', leaveSession);
   $('completeSet').addEventListener('click', () => completeSet().catch(console.error));
   $('historyFilter').addEventListener('change',e=>{historyFilter=e.target.value;renderHome();});
-  $('sessionContext').addEventListener('click',e=>{if(e.target.id==='openSessionProgression')progression.open(state.active.progressionId);});
-  $('skipSet').addEventListener('click',async()=>{const current=state.active&&nextPending(state.active.sets);if(!current||saving)return;current.set.status='skipped';current.set.completedAt=new Date().toISOString();state.active.restUntil=null;await restSave.catch(()=>{});await setMeta('active',state.active);renderSession();});
-  $('sessionHero').addEventListener('change', (event) => sessionFieldChanged(event).catch(console.error));
-  $('sessionHero').addEventListener('input', event => {if(event.target.id==='sessionActualReps')sessionFieldChanged(event).catch(console.error);});
-  $('sessionQueue').addEventListener('click', (event) => { if (event.target.id === 'undoSet') undoSet().catch(console.error); });
-  $('editSessionPlan').addEventListener('click', () => openEditor('session'));
-  $('finishTraining').addEventListener('click', () => finishSession().catch(console.error));
+  $('sessionContext').addEventListener('click', e => {
+    if (e.target.id === 'openSessionProgression') { closeSessionActions(); leaveSession(); }
+  });
+  $('openSessionActions').addEventListener('click', () => { if (state.active && !saving) $('sessionActionsDialog').showModal(); });
+  $('closeSessionActions').addEventListener('click', closeSessionActions);
+  $('skipSet').addEventListener('click', () => { closeSessionActions(); skipSet().catch(console.error); });
+  $('sessionHero').addEventListener('input', event => {
+    if (event.target.id === 'sessionActualReps') sessionFieldChanged(event).catch(error => {
+      message('Не удалось сохранить повторения. Попробуй ещё раз.', true);
+      console.error(error);
+    });
+  });
+  $('sessionHero').addEventListener('click', event => {
+    if (event.target.closest('#decreaseSessionReps')) stepSessionReps(-1);
+    if (event.target.closest('#increaseSessionReps')) stepSessionReps(1);
+  });
+  $('sessionHero').addEventListener('keydown', event => {
+    if (event.target.id === 'sessionActualReps' && event.key === 'Enter') {
+      event.preventDefault(); completeSet().catch(console.error);
+    }
+  });
+  $('undoSet').addEventListener('click', () => { closeSessionActions(); undoSet().catch(console.error); });
+  $('editCurrentSet').addEventListener('click', openCurrentSet);
+  $('sessionSetForm').addEventListener('submit', event => saveCurrentSet(event).catch(console.error));
+  $('closeSessionSet').addEventListener('click', () => { if (!saving) $('sessionSetDialog').close(); });
+  $('editSessionPlan').addEventListener('click', () => { closeSessionActions(); openEditor('session'); });
+  $('showSessionPlan').addEventListener('click', () => {
+    closeSessionActions();
+    $('sessionPlan').open = true;
+    $('sessionPlan').querySelector('summary').focus({preventScroll: true});
+    $('sessionPlan').scrollIntoView({block: 'start'});
+  });
+  for (const id of ['sessionActionsDialog', 'sessionSetDialog']) {
+    $(id).addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+    $(id).addEventListener('close', () => {
+      if (document.body.classList.contains('workout-active') && !document.querySelector('dialog[open]')) {
+        (id === 'sessionSetDialog' ? $('sessionHero') : $('openSessionActions')).focus({preventScroll: true});
+      }
+    });
+    $(id).addEventListener('keydown', event => {
+      if (event.key !== 'Tab') return;
+      const controls = [...$(id).querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')].filter(el => el.getClientRects().length);
+      const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1)
+        : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
+      if (target) { event.preventDefault(); target.focus(); }
+    });
+  }
+  $('finishTraining').addEventListener('click', () => { closeSessionActions(); finishSession().catch(console.error); });
+  $('confirmFinishSession').addEventListener('click', () => finishSession().catch(console.error));
+  $('returnToSession').addEventListener('click', returnToSession);
+  $('finishSessionDialog').addEventListener('cancel', event => {
+    event.preventDefault();
+    returnToSession();
+  });
+  $('finishSessionDialog').addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const buttons = [...$('finishSessionDialog').querySelectorAll('button:not([disabled])')];
+    const target = event.shiftKey && document.activeElement === buttons[0] ? buttons.at(-1)
+      : !event.shiftKey && document.activeElement === buttons.at(-1) ? buttons[0] : null;
+    if (target) { event.preventDefault(); target.focus(); }
+  });
   $('cancelTraining').addEventListener('click', async () => {
+    if (!state.active || saving) return;
+    closeSessionActions();
     if (confirm('Отменить тренировку? Все выполненные подходы этого занятия будут удалены.')) {
+      await sessionFieldSave.catch(() => {});
+      await restSave.catch(() => {});
       await cancelWorkout(state.active.id); state=await readAll(); view = 'home'; render(); message('Тренировка отменена.');
     }
   });
@@ -688,8 +980,15 @@ export async function initTrainingUI() {
   $('importTrainingButton').addEventListener('click', () => $('importTraining').click());
   $('importTraining').addEventListener('change', (event) => importData(event.target.files[0]));
 
+  const dockObserver = new ResizeObserver(entries => {
+    const height = entries[0].target.getBoundingClientRect().height;
+    if (height > 0) document.documentElement.style.setProperty('--session-dock-height', `${Math.ceil(height)}px`);
+  });
+  dockObserver.observe(document.querySelector('.session-dock'));
   render();
   setInterval(() => { if (state.active?.restUntil) renderRest(); }, 250);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && state.active) renderRest(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.active) renderRest({ silent: true });
+  });
   navigator.storage?.persist?.().catch(() => {});
 }

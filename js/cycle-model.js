@@ -77,7 +77,7 @@ function sessionFromInfo(info, day) {
   const arms = Object.fromEntries(ARMS.map(arm => {
     const maximum = maxima[arm], groups = [];
     if (day === 1) {
-      groups.push(group('main', rule.sets, rule.reps, rule.percent, light ? 120 : 240, maximum));
+      groups.push(group('main', rule.sets, rule.reps, rule.percent, light ? 120 : 180, maximum));
       if (!light) groups.push(group('backoff', rule.backoff, 10, .70, 120, maximum));
     } else {
       groups.push(group('main', light ? 2 : 4, 10, light ? .55 : .65, light ? 120 : 150, maximum));

@@ -95,6 +95,17 @@ export const remove=(store,id)=>atomic(()=>({deletes:{[store]:[id]}}));
 export const getMeta=async(id,fallback=null)=>{const db=await openDb();return new Promise((resolve,reject)=>{const r=db.transaction('meta').objectStore('meta').get(id);r.onsuccess=()=>resolve(r.result?.value??fallback);r.onerror=()=>reject(r.error);});};
 export const setMeta=(id,value)=>id==='active'&&value?atomic(state=>state.active?.id===value.id?{puts:{meta:[{id,value}]}}:{}):put('meta',{id,value});
 export const setRestUntil=(id,restUntil)=>atomic(state=>state.active?.id===id?{puts:{meta:[{id:'active',value:{...state.active,restUntil}}]}}:{});
+export const setDraftReps=(id,setId,value)=>atomic(state=>{
+  if(state.active?.id!==id)return {};
+  const current=Object.values(state.active.sets).flat().find(set=>set.id===setId&&set.status==='pending');
+  if(!current)return {};
+  if(value===null)delete current.draftReps;
+  else {
+    if(!Number.isInteger(value)||value<0||value>999)throw new Error('Фактические повторы должны быть от 0 до 999.');
+    current.draftReps=value;
+  }
+  return {puts:{meta:[{id:'active',value:state.active}]}};
+});
 export function saveProgression(program,expectedRevision) {
   return atomic(state=>{
     const old=state.progressions.find(p=>p.id===program.id);

@@ -848,6 +848,9 @@ body:has(.rest-dialog[open]) { overflow: hidden; }
 .rest-dialog__body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
 .rest-dialog__time { font-family: "Sora", sans-serif; font-size: clamp(64px,20vw,160px); font-weight: 700; line-height: 1.1; letter-spacing: -.06em; font-variant-numeric: tabular-nums; color: var(--accent-dark); }
 .rest-dialog__next { margin: 0; text-align: center; font-size: 16px; color: var(--muted); }
+.rest-dialog__springs { margin-top: -12px; font-weight: 700; color: var(--accent-dark); }
+#finishSessionDialog .dialog-actions { flex-wrap: wrap; }
+#finishSessionDialog .dialog-actions .button { flex: 1 1 160px; }
 .rest-dialog__adjust { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; width: min(100%,360px); }
 .rest-dialog__adjust .button { min-height: 56px; font-size: 18px; }
 .rest-dialog > .button { align-self: center; width: min(100%,480px); }

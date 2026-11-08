@@ -37,7 +37,16 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
       .concat((await (await import('./js/workout-db.js')).readAll()).active.sets.left).find(set => set.id === id).status === 'done', pending.id);
     if (await page.locator('#restDialog').isVisible()) await page.locator('#restDialog [data-action=skip-rest]').click();
   };
-  const finish = async () => { await page.locator('#finishTraining').click(); await page.waitForFunction(async () => !(await (await import('./js/workout-db.js')).readAll()).active); };
+  const finish = async () => {
+    const active = (await state()).active;
+    if (active.sets.right.concat(active.sets.left).every(set => set.status !== 'pending')) {
+      await page.locator('#finishSessionDialog').waitFor({ state: 'visible' });
+    }
+    const completed = await page.locator('#finishSessionDialog').isVisible();
+    if (!completed) await page.locator('#openSessionActions').click();
+    await page.locator(completed ? '#confirmFinishSession' : '#finishTraining').click();
+    await page.waitForFunction(async () => !(await (await import('./js/workout-db.js')).readAll()).active);
+  };
   try {
     await page.goto(new URL('#cycle', baseUrl).href); await loaded();
     assert.equal(await page.locator('#sectionCycle').isVisible(), true);
@@ -101,6 +110,10 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
     await page.locator('[data-cycle-action=select-day][data-day="1"]').click();
     await action('start').click(); await page.locator('#sessionActualReps').waitFor();
     const originalActive = structuredClone((await state()).active);
+    await page.locator('#backToTraining').click();
+    await page.locator('#sectionCycle').waitFor({ state: 'visible' });
+    await action('resume-workout').click(); await page.locator('#sessionActualReps').waitFor();
+    assert.equal((await state()).active.id, originalActive.id, 'cycle return/resume preserves the active workout');
     for (const sets of Object.values(originalActive.sets)) {
       assert.deepEqual(sets.map(set => set.cycleRole), ['main', 'main', 'main', 'main', 'main', 'backoff']);
     }
@@ -117,7 +130,7 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
       return rejected;
     });
     assert.deepEqual(guarded, [true, true, true]);
-    await page.locator('#cancelTraining').click();
+    await page.locator('#openSessionActions').click(); await page.locator('#cancelTraining').click();
     await page.waitForFunction(async () => !(await (await import('./js/workout-db.js')).readAll()).active);
     assert.deepEqual(position(await cycle()), { week: 1, day: 1 });
     const tampering = await page.evaluate(async valid => {
@@ -211,13 +224,13 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
     }
     await page.evaluate(() => navigator.serviceWorker.ready); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     const cached = await page.evaluate(async () => {
-      const cache = await caches.open('hvat-static-v18');
+      const cache = await caches.open('hvat-static-v20');
       return Promise.all(['js/cycle-model.js','js/cycle-ui.js','js/cycle-view.js','styles/cycle.css','js/cycle-charts-model.js','js/cycle-charts.js'].map(async asset => !!await cache.match(new URL(asset, location.href))));
     });
     assert.deepEqual(cached, [true, true, true, true, true, true]);
     const offlineBefore = await cycle(); await context.setOffline(true); await page.reload(); await loaded();
     assert.deepEqual(await cycle(), offlineBefore); assert.equal(await page.locator('#sectionCycle').isVisible(), true);
     assert.deepEqual(errors, []);
-    console.log('PASS cycle plan/fact load charts/hand switch; 26-week overview/week 26 preview; independent maxima/pause/reload/return0-1-2/confirmed skip/cancel/partial/full/idempotence/stale import; journal snapshots+history; backupv3/local preservation; 1440/1024/768/320; v18 offline');
+    console.log('PASS cycle plan/fact load charts/hand switch; 26-week overview/week 26 preview; independent maxima/pause/reload/return0-1-2/confirmed skip/cancel/partial/full/finish dialog/idempotence/stale import; journal snapshots+history; backupv3/local preservation; 1440/1024/768/320; v20 offline');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

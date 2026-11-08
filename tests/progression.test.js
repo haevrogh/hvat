@@ -61,7 +61,34 @@ test('four-week waves lower workload and restart for each period', () => {
   assert.ok(b.kg < a.kg && b.sets < a.sets && b.deload);
   assert.equal(c.kg, idealLoad('strength', 1, 12, 0, 100).kg);
   assert.equal(idealLoad('endurance', 1, 6, 1, 100).restSec, 120);
-  assert.equal(idealLoad('speed', 1, 6, 0, 100).restSec, 240);
+  assert.equal(idealLoad('speed', 1, 6, 0, 100).restSec, 180);
+});
+test('new heavy progression assignments use three minutes; light and control rests stay distinct', () => {
+  const p = createProgression(config());
+  for (const slot of p.slots) for (const arm of ARMS) {
+    const expected = slot.arms[arm].ideal.control ? 300 : slot.day === 1 ? 120 : 180;
+    assert.equal(slot.arms[arm].ideal.restSec, expected);
+    assert.ok(slot.plan[arm].length > 0);
+    assert.ok(slot.plan[arm].every(set => set.restSec === expected));
+  }
+  for (const period of ['strength', 'speed', 'peak']) {
+    assert.equal(idealLoad(period, 1, 8, 0, 100).restSec, 180);
+    assert.equal(idealLoad(period, 1, 8, 2, 100).restSec, 180);
+  }
+  assert.equal(idealLoad('peak', 8, 8, 0, 100).restSec, 180);
+  assert.equal(idealLoad('peak', 8, 8, 2, 100).restSec, 300);
+});
+test('importing a fixed progression preserves former and manually entered rest assignments', () => {
+  const p = createProgression(config()), slot = p.slots.find(s => s.period === 'strength' && s.day === 0);
+  for (const arm of ARMS) {
+    slot.arms[arm].ideal.restSec = 240;
+    slot.arms[arm].groups.forEach(group => { group.ideal.restSec = 240; });
+    slot.plan[arm].forEach(set => { set.restSec = 240; });
+  }
+  slot.plan.right[0].restSec = 210;
+  const frozen = JSON.stringify(p);
+  const restored = validateProgressions(validateBackup(JSON.parse(JSON.stringify(backup(p)))));
+  assert.equal(JSON.stringify(restored.progressions[0]), frozen);
 });
 test('peaking increases intensity while reducing volume; taper is the final week', () => {
   const first = idealLoad('peak', 1, 8, 0, 100), last = idealLoad('peak', 7, 8, 0, 100);

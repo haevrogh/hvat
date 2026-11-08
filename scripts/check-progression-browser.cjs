@@ -75,19 +75,27 @@ const path = require('node:path');
     await page.locator('#sessionActualReps').waitFor();
     await page.locator('#sessionActualReps').fill('7');
     await page.locator('#sessionActualReps').dispatchEvent('change');
+    await page.locator('#backToTraining').click();
+    await page.locator('#sectionProgression').waitFor({ state: 'visible' });
+    await page.locator('[data-prog=resume]').click();
+    assert.equal(await page.locator('#sessionActualReps').inputValue(), '7');
     await page.reload();
-    await page.locator('#sectionTrainingButton').click();
+    await loaded();
+    if (!(await page.locator('#trainingSession').isVisible())) await page.locator('#sectionTrainingButton').click();
     await page.locator('#sessionActualReps').waitFor();
     assert.equal(await page.locator('#sessionActualReps').inputValue(), '7');
     let first = true;
-    while (await page.locator('#sessionActualReps').count()) {
+    data = await state();
+    while (['right', 'left'].some(arm => data.active.sets[arm].some(set => set.status === 'pending'))) {
       if (first) { await page.locator('#sessionActualReps').fill('0'); first = false; }
       const before=await page.locator('#sessionProgress').innerText();
       await page.locator('#completeSet').click();
       await page.waitForFunction(before=>document.querySelector('#sessionProgress').textContent!==before,before);
       if (await page.locator('#restDialog').isVisible()) await page.locator('#restDialog [data-action=skip-rest]').click();
+      data = await state();
     }
-    await page.locator('#finishTraining').click();
+    await page.locator('#finishSessionDialog').waitFor({ state: 'visible' });
+    await page.locator('#confirmFinishSession').click();
     await page.waitForFunction(async () => (await (await import('./js/workout-db.js')).readAll()).workouts.length === 1);
     data = await state();
     assert.equal(programFrom(data).slots[0].status, 'completed'); // Warmup shortfall is outside the working-set credit.
@@ -100,7 +108,7 @@ const path = require('node:path');
     assert.deepEqual(data.progressions.find(p => p.id === saved.id), saved);
     await page.evaluate(async () => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v18')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v20')));
     await context.setOffline(true);
     await page.reload();
     await loaded();
@@ -115,6 +123,6 @@ const path = require('node:path');
       await page.screenshot({ path: path.join(process.env.QA_SCREENSHOT_DIR, 'macrocycle-mobile-top.png') });
     }
     assert.deepEqual(errors, []);
-    console.log('PASS three-step wizard, independent bases, 52-week preview, 4 widths, reload/draft repetitions, fixed workout/skip, v18 offline');
+    console.log('PASS three-step wizard, independent bases, 52-week preview, 4 widths, reload/draft repetitions, fixed workout/skip/finish dialog, v20 offline');
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -109,7 +109,7 @@ export function idealLoad(period, periodWeek, periodWeeks, day, baseKg) {
     deload = wave === 3;
   }
   return { kg: baseKg * percent, baseKg, percent: percent * 100, sets, reps,
-    restSec: control || (period === 'peak' && day === 0) ? 300 : day === 1 ? 120 : PERIODS.find(p => p.key === period).rest,
+    restSec: control ? 300 : day === 1 ? 120 : PERIODS.find(p => p.key === period).rest,
     deload, taper, control };
 }
 function warmups(firstKg, baseKg, period, restSec, workReps) {

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>HVAT — калькулятор и тренировки</title>
   <meta name="theme-color" content="#bed8d9" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="styles/block.css">
   <link rel="stylesheet" href="styles/cycle.css">
+  <link rel="stylesheet" href="styles/workout.css">
 </head>
 <body>
   <div class="wrap">
@@ -129,17 +130,24 @@
       </div>
 
       <div id="trainingSession" class="hidden">
-        <div class="session-topline"><button id="backToTraining" class="button button--quiet" type="button">← К списку</button><span id="sessionProgress" class="count-pill"></span></div>
-        <div id="sessionContext" class="training-panel hidden"></div>
-        <div id="sessionHero" class="session-hero"></div>
-        <div id="restPanel" class="rest-panel hidden">
-          <div><small>Отдых</small><strong data-rest-time role="timer" aria-label="Осталось отдыха">00:00</strong></div>
-          <button class="button" type="button" data-action="expand-rest">Развернуть</button>
+        <header class="session-topline">
+          <button id="backToTraining" class="button button--quiet session-back" type="button">← К списку</button>
+          <p id="sessionTitle" class="session-title"></p>
+          <button id="openSessionActions" class="icon-button" type="button" aria-label="Действия тренировки" aria-haspopup="dialog" aria-controls="sessionActionsDialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+        </header>
+        <div class="session-content">
+          <div class="session-progress-row"><span id="sessionProgress"></span><progress id="sessionProgressBar" value="0" max="1" aria-label="Пройдено подходов"></progress></div>
+          <section id="sessionHero" class="session-hero" tabindex="-1" aria-label="Текущий подход"></section>
+          <div id="restPanel" class="rest-panel hidden">
+            <div><small>Отдых</small><strong data-rest-time role="timer" aria-label="Осталось отдыха">00:00</strong></div>
+            <button class="button" type="button" data-action="expand-rest">Развернуть</button>
+          </div>
+          <details id="sessionPlan" class="session-plan" open>
+            <summary>План занятия <span id="sessionPlanCount" class="session-plan-count"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+            <div id="sessionQueue" class="session-plan-content"></div>
+          </details>
         </div>
-        <div class="session-actions"><button id="completeSet" class="button button--primary button--large" type="button">Подход выполнен</button><button id="editSessionPlan" class="button button--quiet" type="button">Изменить план</button></div>
-        <button id="skipSet" class="button button--quiet" type="button">Пропустить подход</button>
-        <div class="training-panel"><div class="training-panel__heading"><h2>План занятия</h2><button id="toggleSound" class="button button--quiet" type="button" aria-pressed="true">Звук: вкл</button></div><div id="sessionQueue"></div></div>
-        <div class="session-footer"><button id="finishTraining" class="button button--quiet" type="button">Завершить тренировку</button><button id="cancelTraining" class="button button--danger" type="button">Отменить</button></div>
+        <footer class="session-dock"><button id="completeSet" class="button button--primary button--large" type="button">Подход выполнен</button></footer>
       </div>
     </section>
 
@@ -189,6 +197,37 @@
     </form>
   </dialog>
 
+  <dialog id="sessionActionsDialog" class="training-dialog training-dialog--small session-actions-dialog" aria-labelledby="sessionActionsTitle">
+    <div class="dialog-heading"><h2 id="sessionActionsTitle">Тренировка</h2><button id="closeSessionActions" class="icon-button" type="button" aria-label="Закрыть действия тренировки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div id="sessionContext" class="session-dialog-context hidden"></div>
+    <button id="editCurrentSet" class="button session-menu-action" type="button">Изменить вес и план <span aria-hidden="true">›</span></button>
+    <button id="editSessionPlan" class="button session-menu-action" type="button">Изменить план занятия <span aria-hidden="true">›</span></button>
+    <button id="showSessionPlan" class="button session-menu-action" type="button">Посмотреть план <span aria-hidden="true">›</span></button>
+    <button id="undoSet" class="button session-menu-action" type="button">Отменить последний подход / пропуск</button>
+    <button id="skipSet" class="button session-menu-action" type="button">Пропустить подход <span aria-hidden="true">›</span></button>
+    <button id="toggleSound" class="button session-menu-action" type="button" aria-pressed="true">Звук: вкл</button>
+    <button id="finishTraining" class="button session-menu-action" type="button">Завершить раньше <span aria-hidden="true">›</span></button>
+    <hr class="session-menu-divider">
+    <button id="cancelTraining" class="button button--danger session-menu-action" type="button">Отменить тренировку</button>
+  </dialog>
+
+  <dialog id="sessionSetDialog" class="training-dialog training-dialog--small" aria-labelledby="sessionSetTitle">
+    <div class="dialog-heading"><h2 id="sessionSetTitle">Изменить подход</h2><button id="closeSessionSet" class="icon-button" type="button" aria-label="Закрыть изменение подхода"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <form id="sessionSetForm">
+      <label class="field">Вес и положения пружин<select id="sessionWeight" aria-label="Вес и положения пружин"></select></label>
+      <label class="field">Плановые повторения<input id="sessionPlannedReps" type="number" min="1" max="999" step="1" inputmode="numeric" required /></label>
+      <p id="sessionSetError" class="form-error" role="alert"></p>
+      <button id="saveCurrentSet" class="button button--primary button--large" type="submit">Применить к подходу</button>
+    </form>
+  </dialog>
+
+  <dialog id="finishSessionDialog" class="training-dialog training-dialog--small" aria-labelledby="finishSessionTitle" aria-describedby="finishSessionSummary">
+    <div class="dialog-heading"><h2 id="finishSessionTitle">Подходы закончились</h2></div>
+    <p id="finishSessionSummary"></p>
+    <p id="finishSessionError" class="form-error" role="alert"></p>
+    <div class="dialog-actions"><button id="returnToSession" class="button button--quiet" type="button">Вернуться к тренировке</button><button id="confirmFinishSession" class="button button--primary" type="button" autofocus>Завершить тренировку</button></div>
+  </dialog>
+
   <dialog id="updateTemplateDialog" class="training-dialog training-dialog--small">
     <div class="dialog-heading"><h2>Обновить шаблон?</h2></div>
     <p id="updateTemplateSummary" class="muted"></p>
@@ -215,6 +254,7 @@
     <div class="rest-dialog__body">
       <div class="rest-dialog__time" data-rest-time role="timer" aria-label="Осталось отдыха">00:00</div>
       <p id="restNext" class="rest-dialog__next"></p>
+      <p id="restSprings" class="rest-dialog__next rest-dialog__springs"></p>
       <div class="rest-dialog__adjust"><button class="button" type="button" data-action="subtract-rest">−30 сек</button><button class="button" type="button" data-action="add-rest">+30 сек</button></div>
       <p id="restError" class="form-error" role="alert"></p>
     </div>

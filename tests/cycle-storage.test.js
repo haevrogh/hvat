@@ -71,6 +71,20 @@ test('backups preserve legacy cycle warmups in active, pending and finished work
     assert.deepEqual(workout.sets.right[0], performed);
   }
 });
+test('backup preserves an active cycle snapshot and manual rest despite new three-minute assignments', () => {
+  const cycle = createCycle({ right: 100, left: 80 }), active = activeWorkout(cycle), raw = backup(cycle);
+  for (const arm of ['right', 'left']) {
+    for (const plan of [active.initialPlan, active.sets]) {
+      plan[arm].filter(set => set.cycleRole === 'main').forEach(set => { set.restSec = 240; });
+    }
+  }
+  active.restOverride = 210;
+  active.restUntil = Date.parse(timestamp) + 240000;
+  raw.data.active = active;
+  const restored = validateBackup(JSON.parse(JSON.stringify(raw)));
+  assert.deepEqual(restored.active, active);
+  assert.equal(cyclePlan(restored.endlessCycle).right[0].restSec, 180);
+});
 
 test('backup validates foreign cycle fields on active, pending and completed workouts', () => {
   const cycle = createCycle({ right: 100, left: 80 });

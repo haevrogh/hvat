@@ -1,6 +1,6 @@
-const CACHE_NAME = 'hvat-static-v18';
+const CACHE_NAME = 'hvat-static-v20';
 const ASSETS = [
-  './', './index.html', './manifest.json', './styles/main.css',
+  './', './index.html', './manifest.json', './styles/main.css', './styles/workout.css',
   './js/init.js', './js/ui.js', './js/formulas.js', './js/finders.js',
   './js/grip-animation.js', './js/grip-model.js', './assets/grip-atlas.webp',
   './js/workout-ui.js', './js/workout-db.js', './js/workout-model.js',

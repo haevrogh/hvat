@@ -45,7 +45,7 @@ export function initBlockUI(bridge) {
   function selectedSession(next) { return selected(next).sessions.find(s=>s.id===state.sessionId); }
   function preset(count) {
     const percent={5:70,4:75,3:80,2:85}[count];
-    return [createRow({role:'warmup',sets:1,reps:1,value:percent-25,restSec:90}),createRow({role:'warmup',sets:1,reps:1,value:percent-15,restSec:90}),createRow({role:'warmup',sets:1,reps:1,value:percent-5,restSec:120}),createRow({sets:count,reps:count,value:percent,restSec:240}),createRow({sets:2,reps:8,value:55,restSec:120})];
+    return [createRow({role:'warmup',sets:1,reps:1,value:percent-25,restSec:90}),createRow({role:'warmup',sets:1,reps:1,value:percent-15,restSec:90}),createRow({role:'warmup',sets:1,reps:1,value:percent-5,restSec:120}),createRow({sets:count,reps:count,value:percent,restSec:180}),createRow({sets:2,reps:8,value:55,restSec:120})];
   }
   async function start() {
     await pending;

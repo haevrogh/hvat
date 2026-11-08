@@ -41,6 +41,17 @@ test('light weeks lower both days, omit backoff, and still increase the weekly b
     assert.ok(data.maxima.right > getCycleWeek(make(), week - 1).maxima.right);
   }
 });
+test('heavy cycle work uses three minutes for both arms across repeating weeks', () => {
+  const cycle = make();
+  for (const week of [1, 2, 3, 4, 6, 7, 8, 9, 26]) {
+    const [heavy, volume] = getCycleWeek(cycle, week).sessions;
+    for (const arm of ['right', 'left']) {
+      assert.equal(heavy.arms[arm][0].restSec, 180);
+      assert.ok(heavy.arms[arm].filter(group => group.role === 'backoff').every(group => group.restSec === 120));
+      assert.ok(volume.arms[arm].every(group => group.restSec === 150));
+    }
+  }
+});
 test('strict floor does not round the target near 93.7 or 76.6', () => {
   const cycle = make();
   const main = getCycleSession(cycle, 9, 1).arms.right.find(group => group.role === 'main');
@@ -105,7 +116,7 @@ test('journal plan starts with working sets, uses fresh IDs and freezes maxima',
   const cycle = make(), plan = cyclePlan(cycle), again = cyclePlan(cycle);
   assert.equal(plan.right.length, 6); assert.equal(plan.left.length, 6);
   assert.equal(plan.right.reduce((sum, set) => sum + set.reps, 0), 35);
-  assert.equal(plan.right[0].cycleRole, 'main'); assert.equal(plan.right[0].restSec, 240);
+  assert.equal(plan.right[0].cycleRole, 'main'); assert.equal(plan.right[0].restSec, 180);
   assert.equal(plan.right.at(-1).cycleRole, 'backoff'); assert.equal(plan.right.at(-1).role, 'main');
   assert.equal(plan.right.at(-1).cyclePercent, .7); assert.equal(plan.right.at(-1).restSec, 120);
   assert.equal(plan.left[0].cycleMaxKg, 80);
