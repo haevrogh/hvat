@@ -108,7 +108,7 @@ const path = require('node:path');
     assert.deepEqual(data.progressions.find(p => p.id === saved.id), saved);
     await page.evaluate(async () => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v20')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v21')));
     await context.setOffline(true);
     await page.reload();
     await loaded();
@@ -123,6 +123,6 @@ const path = require('node:path');
       await page.screenshot({ path: path.join(process.env.QA_SCREENSHOT_DIR, 'macrocycle-mobile-top.png') });
     }
     assert.deepEqual(errors, []);
-    console.log('PASS three-step wizard, independent bases, 52-week preview, 4 widths, reload/draft repetitions, fixed workout/skip/finish dialog, v20 offline');
+    console.log('PASS three-step wizard, independent bases, 52-week preview, 4 widths, reload/draft repetitions, fixed workout/skip/finish dialog, v21 offline');
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

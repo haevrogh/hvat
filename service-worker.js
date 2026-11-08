@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hvat-static-v20';
+const CACHE_NAME = 'hvat-static-v21';
 const ASSETS = [
   './', './index.html', './manifest.json', './styles/main.css', './styles/workout.css',
   './js/init.js', './js/ui.js', './js/formulas.js', './js/finders.js',

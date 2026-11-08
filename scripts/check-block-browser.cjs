@@ -235,11 +235,11 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8765/';
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '52-week overflow');
     await act('edit-block').click(); await page.locator('#blockDialog [name=weeks]').fill('3'); await submit();
     await page.evaluate(() => navigator.serviceWorker.ready); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v20')));
-    for (const name of ['block-model', 'block-storage', 'block-ui', 'block-view', 'block-charts', 'block-format']) assert.ok(await page.evaluate(async name => !!await (await caches.open('hvat-static-v20')).match(new URL(`./js/${name}.js`, location.href)), name), `offline cache missing ${name}`);
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v21')));
+    for (const name of ['block-model', 'block-storage', 'block-ui', 'block-view', 'block-charts', 'block-format']) assert.ok(await page.evaluate(async name => !!await (await caches.open('hvat-static-v21')).match(new URL(`./js/${name}.js`, location.href)), name), `offline cache missing ${name}`);
     const offlineBefore = (await state()).blockWorkspace; await context.setOffline(true);
     await page.reload(); await loaded(); await page.locator('#sectionBlockButton').click();
     assert.deepEqual((await state()).blockWorkspace, offlineBefore); assert.deepEqual(errors, []);
-    console.log('PASS Monday-first/full weekday names/21 active days/padding/Mon-Thu-Sun fixtures/partial-week copy guards; block UI/profile/presets/live metrics/copy/repeat/reload; v3 preservation/linked journal/finish dialog/export/import; 1440/1024/768/320/52-weeks/accessibility; v20 offline');
+    console.log('PASS Monday-first/full weekday names/21 active days/padding/Mon-Thu-Sun fixtures/partial-week copy guards; block UI/profile/presets/live metrics/copy/repeat/reload; v3 preservation/linked journal/finish dialog/export/import; 1440/1024/768/320/52-weeks/accessibility; v21 offline');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

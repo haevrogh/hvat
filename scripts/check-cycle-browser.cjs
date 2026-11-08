@@ -8,6 +8,7 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Yekaterinburg', acceptDownloads: true });
   const page = await context.newPage(), errors = [];
+  const spacingEvidence = { weekCards: [], overview: [] };
   page.on('pageerror', error => errors.push(error.message));
   page.on('dialog', dialog => dialog.accept());
   const state = () => page.evaluate(async () => (await import('./js/workout-db.js')).readAll());
@@ -47,6 +48,66 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
     await page.locator(completed ? '#confirmFinishSession' : '#finishTraining').click();
     await page.waitForFunction(async () => !(await (await import('./js/workout-db.js')).readAll()).active);
   };
+  async function weekCardGeometry(width, selectedWeek) {
+    const selected = page.locator(`.cycle-week[data-week="${selectedWeek}"]`);
+    await page.keyboard.press('Tab'); await selected.focus();
+    const measured = await page.evaluate(() => {
+      const rect = element => { const r = element.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
+      const container = document.querySelector('.cycle-weeks'), style = getComputedStyle(container), box = rect(container);
+      const cards = [...container.querySelectorAll('.cycle-week')].map(card => ({ week: Number(card.dataset.week), selected: card.classList.contains('is-selected'), rect: rect(card), title: rect(card.querySelector('.cycle-week-title')), value: rect(card.querySelector('strong')), state: rect(card.querySelector('.cycle-week-state')), outlineWidth: parseFloat(getComputedStyle(card).outlineWidth), outlineOffset: parseFloat(getComputedStyle(card).outlineOffset) }));
+      return { viewportWidth: innerWidth, pageScrollWidth: document.documentElement.scrollWidth, container: { ...box, clientHeight: container.clientHeight, clientTop: container.clientTop, clientLeft: container.clientLeft, clientWidth: container.clientWidth, scrollWidth: container.scrollWidth, paddingTop: parseFloat(style.paddingTop), paddingBottom: parseFloat(style.paddingBottom) }, cards, bottomAir: box.top + container.clientTop + container.clientHeight - Math.max(...cards.map(card => card.rect.bottom)) };
+    });
+    assert.equal(measured.pageScrollWidth, width, `week cards do not overflow page at ${width}`);
+    assert.equal(measured.cards.length, 5);
+    const tops = measured.cards.map(card => card.value.top), bottoms = measured.cards.map(card => card.value.bottom);
+    assert.ok(Math.max(...tops) - Math.min(...tops) <= 1 && Math.max(...bottoms) - Math.min(...bottoms) <= 1, `week values align at ${width}, selected ${selectedWeek}: ${JSON.stringify(measured.cards)}`);
+    assert.ok(measured.cards.every(card => card.title.height >= 15 && card.state.height >= 15), 'week title and current-state each reserve a line');
+    assert.ok(measured.bottomAir >= 12, `air between cards and scrollbar at ${width}: ${measured.bottomAir}`);
+    const card = measured.cards.find(item => item.week === selectedWeek);
+    assert.ok(card?.selected);
+    assert.ok(card.outlineWidth >= 3, 'keyboard focus remains visible');
+    const focusExtent = card.outlineWidth + Math.max(0, card.outlineOffset);
+    assert.ok(card.rect.left - focusExtent >= measured.container.left + measured.container.clientLeft - 1, 'left focus outline is not clipped');
+    assert.ok(card.rect.top - focusExtent >= measured.container.top + measured.container.clientTop - 1, 'top focus outline is not clipped');
+    assert.ok(card.rect.bottom + focusExtent <= measured.container.top + measured.container.clientTop + measured.container.clientHeight + 1, 'bottom focus outline is not clipped');
+    spacingEvidence.weekCards.push({ width, selectedWeek, ...measured });
+    if (process.env.QA_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.QA_SCREENSHOT_DIR, { recursive: true });
+      await page.locator('.cycle-weeks').screenshot({ path: path.join(process.env.QA_SCREENSHOT_DIR, `cycle-spacing-v21-weeks-${width}-selected${selectedWeek}.png`) });
+    }
+    await page.locator('.cycle-week').last().focus();
+    const rightEdge = await page.evaluate(() => {
+      const container = document.querySelector('.cycle-weeks'), card = container.querySelector('.cycle-week:last-child'), style = getComputedStyle(card);
+      return { cardRight: card.getBoundingClientRect().right, viewportRight: container.getBoundingClientRect().left + container.clientLeft + container.clientWidth, outlineExtent: parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset)) };
+    });
+    assert.ok(rightEdge.cardRight + rightEdge.outlineExtent <= rightEdge.viewportRight + 1, 'right focus outline is not clipped at the scroll boundary');
+  }
+  async function overviewGeometry(width) {
+    const measured = await page.evaluate(() => {
+      const rect = element => { const r = element.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
+      const wrapper = document.querySelector('.cycle-overview-scroll'), rows = [...document.querySelectorAll('.cycle-overview-table tbody tr')];
+      return { viewportWidth: innerWidth, pageScrollWidth: document.documentElement.scrollWidth, wrapper: { ...rect(wrapper), clientWidth: wrapper.clientWidth, scrollWidth: wrapper.scrollWidth, overflowX: getComputedStyle(wrapper).overflowX }, rows: [rows[0], rows[1], rows[9]].map(row => ({ current: row.classList.contains('is-current'), firstCell: rect(row.children[0]), paddingLeft: parseFloat(getComputedStyle(row.children[0]).paddingLeft), button: rect(row.querySelector('button')), caption: row.querySelector('small') ? rect(row.querySelector('small')) : null, values: [...row.querySelectorAll('.cycle-overview-value')].map(rect) })) };
+    });
+    assert.equal(measured.pageScrollWidth, width, `overview does not overflow page at ${width}`);
+    assert.ok(['auto', 'scroll'].includes(measured.wrapper.overflowX), 'table overflow stays within its wrapper');
+    for (const row of measured.rows) {
+      assert.ok(row.button.width >= 44 && row.button.height >= 44 && row.button.width <= 45 && row.button.height <= 45, `week button remains 44px without stretching: ${JSON.stringify(row.button)}`);
+      assert.ok(row.button.left - row.firstCell.left >= 12 - 1, 'week button is separated from current-week indicator');
+      assert.equal(row.values.length, 3, 'maximum and both sessions have value wrappers');
+      for (const value of row.values) {
+        assert.ok(value.height >= 44);
+        assert.ok(Math.abs((row.button.top + row.button.bottom) / 2 - (value.top + value.bottom) / 2) <= 1, `button and numeric content align at ${width}`);
+      }
+      if (row.caption) {
+        assert.ok(row.caption.top - row.button.bottom >= 4, 'week caption has room below its button');
+        assert.ok(row.caption.width <= row.button.width + 1, 'week caption stays within button column');
+        assert.ok(Math.abs((row.caption.left + row.caption.right) / 2 - (row.button.left + row.button.right) / 2) <= 1, 'week caption is centered under its number');
+      }
+    }
+    assert.equal(measured.rows[0].paddingLeft, measured.rows[1].paddingLeft, 'current and regular week cells share the same left alignment');
+    spacingEvidence.overview.push({ width, ...measured });
+    if (process.env.QA_SCREENSHOT_DIR) await page.locator('.cycle-overview').screenshot({ path: path.join(process.env.QA_SCREENSHOT_DIR, `cycle-spacing-v21-overview-${width}.png`) });
+  }
   try {
     await page.goto(new URL('#cycle', baseUrl).href); await loaded();
     assert.equal(await page.locator('#sectionCycle').isVisible(), true);
@@ -58,6 +119,20 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
     assert.deepEqual(position(await cycle()), { week: 1, day: 1 });
     assert.deepEqual((await cycle()).initialMaxima, { right: 100, left: 80 });
     assert.equal(await page.locator('.primary-nav #sectionProgressionButton').count(), 0);
+    const beforeSpacing = await cycle();
+    for (const width of [320, 390, 700, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => document.fonts.ready);
+      await weekCardGeometry(width, 1);
+      await action('page-next').click(); await action('page-next').click();
+      await page.locator('.cycle-week[data-week="11"]').click();
+      await weekCardGeometry(width, 11);
+      await action('view-overview').click(); await overviewGeometry(width);
+      await action('view-sessions').click(); await action('current').click();
+    }
+    assert.deepEqual(await cycle(), beforeSpacing, 'layout previews do not change the cycle');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    if (process.env.QA_SCREENSHOT_DIR) fs.writeFileSync(path.join(process.env.QA_SCREENSHOT_DIR, 'cycle-spacing-v21-checks.json'), JSON.stringify(spacingEvidence, null, 2) + '\n');
     await action('view-charts').click();
     const loadCharts = page.locator('.cycle-load');
     const volumeLine = loadCharts.locator('.block-chart-line.block-chart-volume');
@@ -224,13 +299,13 @@ const baseUrl = process.env.HVAT_URL || 'http://127.0.0.1:8766/';
     }
     await page.evaluate(() => navigator.serviceWorker.ready); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     const cached = await page.evaluate(async () => {
-      const cache = await caches.open('hvat-static-v20');
+      const cache = await caches.open('hvat-static-v21');
       return Promise.all(['js/cycle-model.js','js/cycle-ui.js','js/cycle-view.js','styles/cycle.css','js/cycle-charts-model.js','js/cycle-charts.js'].map(async asset => !!await cache.match(new URL(asset, location.href))));
     });
     assert.deepEqual(cached, [true, true, true, true, true, true]);
     const offlineBefore = await cycle(); await context.setOffline(true); await page.reload(); await loaded();
     assert.deepEqual(await cycle(), offlineBefore); assert.equal(await page.locator('#sectionCycle').isVisible(), true);
     assert.deepEqual(errors, []);
-    console.log('PASS cycle plan/fact load charts/hand switch; 26-week overview/week 26 preview; independent maxima/pause/reload/return0-1-2/confirmed skip/cancel/partial/full/finish dialog/idempotence/stale import; journal snapshots+history; backupv3/local preservation; 1440/1024/768/320; v20 offline');
+    console.log('PASS cycle plan/fact load charts/hand switch; 26-week overview/week 26 preview; independent maxima/pause/reload/return0-1-2/confirmed skip/cancel/partial/full/finish dialog/idempotence/stale import; journal snapshots+history; backupv3/local preservation; 1440/1024/768/320; v21 offline');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

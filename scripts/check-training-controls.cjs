@@ -215,7 +215,7 @@ const { setTimeout: delay } = require('node:timers/promises');
     await sessionAction('undoSet'); await complete(); await rest.waitFor({ state: 'visible' });
     await rest.locator('[data-action=collapse-rest]').click();
     await page.evaluate(() => navigator.serviceWorker.ready); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v20')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('hvat-static-v21')));
     const beforeOffline = await state(); await context.setOffline(true); await page.reload(); await loaded();
     assert.deepEqual((await state()).manualRecords, beforeOffline.manualRecords);
     assert.deepEqual((await state()).active, beforeOffline.active); await context.setOffline(false);
@@ -240,6 +240,6 @@ const { setTimeout: delay } = require('node:timers/promises');
       await clearTemplatePrompt();
     }
     assert.deepEqual(errors, []);
-    console.log('PASS rest fullscreen/focus/keyboard/rapid adjustments+draft increments/reload/springs/3-2-1-go/no duplicates/silent mode/background/skip; completion modal/return/Escape/undo/resume/reload/storage retry/double confirm/partial/all skipped/320px; v20 offline reload');
+    console.log('PASS rest fullscreen/focus/keyboard/rapid adjustments+draft increments/reload/springs/3-2-1-go/no duplicates/silent mode/background/skip; completion modal/return/Escape/undo/resume/reload/storage retry/double confirm/partial/all skipped/320px; v21 offline reload');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
